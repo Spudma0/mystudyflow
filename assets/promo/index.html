@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MyStudyFlow promo cards</title>
+<!--
+  Every exported card at full size, for viewing and saving. Right-click a card
+  and "Save image as…", or use the link under it to open the file on its own.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #08070C;
+    color: #F5F5F7;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 32px;
+  }
+  h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+  p.hint { color: #9B9BAE; font-size: 14px; margin-top: 6px; margin-bottom: 28px; }
+  figure { margin-bottom: 36px; }
+  /* Natural size, never upscaled — a card shown larger than it was exported
+     is exactly the blur we are trying to avoid. */
+  img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
+  figcaption { margin-top: 10px; font-size: 13px; }
+  a { color: #EC4899; }
+</style>
+</head>
+<body>
+  <h1>MyStudyFlow promo cards</h1>
+  <p class="hint">
+    1800 &times; 2250 PNG, 4:5. Shown scaled to fit — right-click &rarr; Save image as&hellip;
+    saves the full-size file, or open one by name to see it at 1:1.
+  </p>
+  <div id="list"></div>
+<script>
+  const CARDS = [
+    ['01-your-home-screen.png', 'Your day, your home screen'],
+    ['02-make-it-yours.png', 'Make it look like yours'],
+    ['03-lessons-from-your-textbook.png', 'Lessons built from your textbook'],
+    ['04-every-hour-accounted-for.png', 'Every hour, accounted for'],
+    ['05-rank-up-every-subject.png', 'Rank up every subject'],
+    ['06-timetable-and-deadlines.png', 'Timetable and deadlines, sorted'],
+  ];
+  document.getElementById('list').innerHTML = CARDS.map(([file, title]) => `
+    <figure>
+      <img src="cards/${file}" alt="${title}" width="1800" height="2250" />
+      <figcaption>${title} &middot; <a href="cards/${file}" target="_blank">${file}</a></figcaption>
+    </figure>
+  `).join('');
+</script>
+</body>
+</html>
