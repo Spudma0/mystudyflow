@@ -9,7 +9,7 @@
     "backgroundColor": "#0A0A0F",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.spudma.studyflow",
+      "bundleIdentifier": "com.spudma.mystudyflow",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -22,7 +22,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.spudma.studyflow"
+      "package": "com.spudma.mystudyflow"
     },
     "web": {
       "favicon": "./assets/favicon.png",
