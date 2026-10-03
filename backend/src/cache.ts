@@ -224,18 +224,20 @@ export async function cached<T>(
 const inFlight = new Map<string, Promise<unknown>>();
 
 /**
- * Whether the shared table can actually be read right now.
+ * How many entries the shared table holds, or null when it can't be read.
  *
- * Having credentials is not the same as having the table: until the migration
- * in db/content_cache.sql has been run, every shared write fails and the cache
- * is silently local again. Reported as what it is, so the one place you would
- * look to check says so.
+ * The count rather than a yes/no, because a yes/no cannot tell the two
+ * failures apart. Row level security is on with no policies, so a key that
+ * isn't the service role reads zero rows and reports no error at all — a
+ * misconfigured backend would look healthy while quietly caching nothing.
+ * A number that matches what is actually stored can only come from a key with
+ * the access to see it.
  */
-async function sharedReachable(): Promise<boolean> {
+async function sharedCount(): Promise<number | null> {
   const store = sharedStore();
-  if (!store) return false;
-  const { error } = await store.from(TABLE).select('namespace').limit(1);
-  return !error;
+  if (!store) return null;
+  const { count, error } = await store.from(TABLE).select('*', { count: 'exact', head: true });
+  return error ? null : count ?? 0;
 }
 
 /** Hit rate and size per namespace — what the cache is actually saving. */
@@ -263,7 +265,9 @@ export async function cacheStats(): Promise<Record<string, unknown>> {
     dir: CACHE_DIR,
     // Whether entries outlive this container, which is the difference between
     // paying for a lesson once and paying for it after every deploy.
-    shared: await sharedReachable(),
+    // Null means the shared table could not be read at all; a number is how
+    // many entries survive a redeploy.
+    sharedEntries: await sharedCount(),
     generating: inFlight.size,
     namespaces,
   };
