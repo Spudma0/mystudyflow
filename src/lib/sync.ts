@@ -4,6 +4,7 @@ import { useRemindersStore } from '../store/useRemindersStore';
 import { useSubjectDataStore } from '../store/useSubjectDataStore';
 import { useStudyTopicsStore } from '../store/useStudyTopicsStore';
 import { useSubjectProfileStore } from '../store/useSubjectProfileStore';
+import { useWidgetsStore, WIDGET_META, WidgetId } from '../store/useWidgetsStore';
 
 /**
  * Sync between the local zustand stores and the `user_data` table.
@@ -14,16 +15,26 @@ import { useSubjectProfileStore } from '../store/useSubjectProfileStore';
  * up (debounced) as the source of truth for that device.
  */
 
-type StoreKey = 'timetable' | 'reminders' | 'subject-data' | 'study-topics' | 'subject-profiles';
+type StoreKey =
+  | 'timetable'
+  | 'reminders'
+  | 'subject-data'
+  | 'study-topics'
+  | 'subject-profiles'
+  | 'widgets';
 
-// Each entry knows how to read the syncable slice of its store and write it back.
+// Each entry knows its store, how to read the syncable slice of it, and how to
+// write one back. Holding the store here rather than looking it up by key means
+// adding one is a single entry and nothing else.
 const STORES: {
   key: StoreKey;
+  store: { subscribe: (listener: () => void) => () => void };
   read: () => Record<string, unknown>;
   write: (payload: any) => void;
 }[] = [
   {
     key: 'timetable',
+    store: useTimetableStore,
     read: () => {
       const s = useTimetableStore.getState();
       return { timetable: s.timetable, cycleStartDate: s.cycleStartDate };
@@ -38,6 +49,7 @@ const STORES: {
   },
   {
     key: 'reminders',
+    store: useRemindersStore,
     read: () => ({ reminders: useRemindersStore.getState().reminders }),
     write: (p) => {
       if (!Array.isArray(p.reminders)) return;
@@ -49,6 +61,7 @@ const STORES: {
   },
   {
     key: 'subject-data',
+    store: useSubjectDataStore,
     read: () => ({ bySubject: useSubjectDataStore.getState().bySubject }),
     // Merged, local first — see pullAll. A remote copy that predates the work
     // on this device must not delete it.
@@ -60,17 +73,41 @@ const STORES: {
   },
   {
     key: 'study-topics',
+    store: useStudyTopicsStore,
     read: () => ({ topics: useStudyTopicsStore.getState().topics }),
     write: (p) => Array.isArray(p.topics) && useStudyTopicsStore.setState({ topics: p.topics }),
   },
   {
     key: 'subject-profiles',
+    store: useSubjectProfileStore,
     read: () => ({ bySubject: useSubjectProfileStore.getState().bySubject }),
     write: (p) =>
       p.bySubject &&
       useSubjectProfileStore.setState({
         bySubject: { ...p.bySubject, ...useSubjectProfileStore.getState().bySubject },
       }),
+  },
+  {
+    key: 'widgets',
+    store: useWidgetsStore,
+    read: () => {
+      const s = useWidgetsStore.getState();
+      return { widgets: s.widgets, pinnedExamId: s.pinnedExamId };
+    },
+    write: (p) => {
+      if (!Array.isArray(p.widgets)) return;
+      // Ids this build doesn't know are dropped, exactly as the store does on
+      // rehydration: an older app reading a newer account must not render a
+      // row of blank slots.
+      const known = p.widgets.filter((id: string): id is WidgetId => id in WIDGET_META);
+      // The strip is never empty, so an empty or wholly unrecognised list is a
+      // payload to ignore rather than a layout to apply.
+      if (!known.length) return;
+      useWidgetsStore.setState({
+        widgets: known,
+        pinnedExamId: typeof p.pinnedExamId === 'string' ? p.pinnedExamId : null,
+      });
+    },
   },
 ];
 
@@ -86,17 +123,9 @@ const pending: Record<string, ReturnType<typeof setTimeout>> = {};
  * first means the pull always merges into the real local state.
  */
 function whenHydrated(): Promise<void> {
-  const stores = [
-    useTimetableStore,
-    useRemindersStore,
-    useSubjectDataStore,
-    useStudyTopicsStore,
-    useSubjectProfileStore,
-  ];
-
   return Promise.all(
-    stores.map(
-      (store) =>
+    STORES.map(
+      ({ store }) =>
         new Promise<void>((resolve) => {
           const p = (store as any).persist;
           if (!p || p.hasHydrated?.()) return resolve();
@@ -169,18 +198,7 @@ export function startSync(userId: string): void {
   currentUserId = userId;
 
   for (const s of STORES) {
-    const store =
-      s.key === 'timetable'
-        ? useTimetableStore
-        : s.key === 'reminders'
-        ? useRemindersStore
-        : s.key === 'subject-data'
-        ? useSubjectDataStore
-        : s.key === 'study-topics'
-        ? useStudyTopicsStore
-        : useSubjectProfileStore;
-
-    const unsub = (store as any).subscribe(() => {
+    const unsub = s.store.subscribe(() => {
       if (currentUserId !== userId) return;
       clearTimeout(pending[s.key]);
       pending[s.key] = setTimeout(() => push(userId, s.key, s.read()).catch(() => {}), 1200);
@@ -203,4 +221,8 @@ export function clearLocalData(): void {
   useSubjectDataStore.setState({ bySubject: {} });
   useStudyTopicsStore.setState({ topics: [] });
   useSubjectProfileStore.setState({ bySubject: {} });
+  // Back to the default strip rather than empty: the home screen always shows
+  // widgets, and the next account's own layout arrives with its first pull.
+  useWidgetsStore.getState().resetWidgets();
+  useWidgetsStore.setState({ pinnedExamId: null });
 }

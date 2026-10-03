@@ -1,4 +1,7 @@
 import { ClassEntry, DaySchedule, Reminder, StudySession, SubjectData } from '../types';
+// Type-only, so this module stays free of the store at runtime and can be
+// imported by a plain Node script.
+import type { WidgetId } from '../store/useWidgetsStore';
 
 /**
  * A term of believable student data, built from nothing but its arguments.
@@ -263,6 +266,23 @@ export const SHOWCASE_THEME = {
   /** Cards and button surfaces. */
   card: '#241A2E',
 };
+
+/**
+ * The home strip: the four new widgets alongside the three stat cards.
+ *
+ * Shared with the demo account, which syncs its layout like any other account,
+ * so a reviewer opening the app sees the strip as it is meant to look rather
+ * than the three defaults.
+ */
+export const SHOWCASE_WIDGETS: WidgetId[] = [
+  'clock',
+  'analogClock',
+  'date',
+  'checklist',
+  'streak',
+  'exam',
+  'classesLeft',
+];
 
 /** The Monday of the current week, where Day 1 of the cycle lands. */
 export function thisMonday(): string {

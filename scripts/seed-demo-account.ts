@@ -26,6 +26,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   DEMO_SUBJECTS,
   SHOWCASE_THEME,
+  SHOWCASE_WIDGETS,
   buildReminders,
   buildStudyHistory,
   buildTimetable,
@@ -115,6 +116,8 @@ async function main() {
     { store_key: 'study-topics', payload: { topics: [] } },
     // Empty on purpose: a study plan is generated, and the demo account has none.
     { store_key: 'subject-profiles', payload: { bySubject: {} } },
+    // The home strip, so the reviewer sees the widgets rather than the defaults.
+    { store_key: 'widgets', payload: { widgets: SHOWCASE_WIDGETS, pinnedExamId: null } },
   ];
 
   for (const row of payloads) {

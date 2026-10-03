@@ -1,13 +1,14 @@
 import { useTimetableStore } from '../store/useTimetableStore';
 import { useRemindersStore } from '../store/useRemindersStore';
 import { useSubjectDataStore } from '../store/useSubjectDataStore';
-import { useWidgetsStore, WidgetId } from '../store/useWidgetsStore';
+import { useWidgetsStore } from '../store/useWidgetsStore';
 import { useSubjectProfileStore } from '../store/useSubjectProfileStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useAuthStore } from '../store/useAuthStore';
 import {
   SHOWCASE_SUBJECTS,
   SHOWCASE_THEME,
+  SHOWCASE_WIDGETS,
   buildReminders,
   buildStudyHistory,
   buildTimetable,
@@ -28,16 +29,6 @@ import {
  * Math and `test` are real work and expensive to rebuild, so the timetable is
  * built around those two names and no profile is created or removed.
  */
-
-const SHOWCASE_WIDGETS: WidgetId[] = [
-  'clock',
-  'analogClock',
-  'date',
-  'checklist',
-  'streak',
-  'exam',
-  'classesLeft',
-];
 
 // --- Renaming --------------------------------------------------------------
 
