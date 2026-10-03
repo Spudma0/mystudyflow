@@ -38,6 +38,36 @@ const DEMO_NAME = 'Alex Mercer';
 const DEMO_SCHOOL = 'Riverwood Secondary College';
 const DEMO_YEAR = 11;
 
+/**
+ * Builds the data as though today were some other day.
+ *
+ * Everything in showcaseData is relative to now — the study streak runs up to
+ * today, the reminders are so many days out — so a demo seeded on a Saturday
+ * shows an empty schedule and a broken streak if it is then looked at on the
+ * Monday. Set DEMO_AS_OF to the day the demo should look alive on.
+ *
+ * Only the generation sees the shifted clock; it is put back before anything
+ * is written, so the timestamps stored are ordinary absolute ones.
+ */
+function withToday<T>(asOf: Date, build: () => T): T {
+  const Real = Date;
+  const offset = asOf.getTime() - Real.now();
+  function Shifted(this: unknown, ...args: unknown[]) {
+    // @ts-expect-error — standing in for the real constructor
+    return args.length ? new Real(...args) : new Real(Real.now() + offset);
+  }
+  Shifted.prototype = Real.prototype;
+  Shifted.now = () => Real.now() + offset;
+  Shifted.parse = Real.parse;
+  Shifted.UTC = Real.UTC;
+  (globalThis as { Date: unknown }).Date = Shifted;
+  try {
+    return build();
+  } finally {
+    (globalThis as { Date: unknown }).Date = Real;
+  }
+}
+
 /** Read without a dotenv dependency — this script runs outside the backend. */
 function env(): { url: string; key: string } {
   const raw = readFileSync(join(__dirname, '..', 'backend', '.env'), 'utf8');
@@ -102,15 +132,19 @@ async function main() {
   if (profileError) throw profileError;
 
   // --- The data -----------------------------------------------------------
-  const timetable = {
-    days: buildTimetable(DEMO_SUBJECTS),
-    cycleType: 10,
-  };
-  const bySubject = buildStudyHistory(DEMO_SUBJECTS);
-  const reminders = buildReminders(DEMO_SUBJECTS);
+  const asOf = process.env.DEMO_AS_OF ? new Date(process.env.DEMO_AS_OF) : new Date();
+  if (Number.isNaN(asOf.getTime())) throw new Error('DEMO_AS_OF is not a date');
+  if (process.env.DEMO_AS_OF) console.log('building as of', asOf.toString());
+
+  const { timetable, bySubject, reminders, cycleStart } = withToday(asOf, () => ({
+    timetable: { days: buildTimetable(DEMO_SUBJECTS), cycleType: 10 },
+    bySubject: buildStudyHistory(DEMO_SUBJECTS),
+    reminders: buildReminders(DEMO_SUBJECTS),
+    cycleStart: thisMonday(),
+  }));
 
   const payloads: { store_key: string; payload: Record<string, unknown> }[] = [
-    { store_key: 'timetable', payload: { timetable, cycleStartDate: thisMonday() } },
+    { store_key: 'timetable', payload: { timetable, cycleStartDate: cycleStart } },
     { store_key: 'reminders', payload: { reminders } },
     { store_key: 'subject-data', payload: { bySubject } },
     { store_key: 'study-topics', payload: { topics: [] } },
