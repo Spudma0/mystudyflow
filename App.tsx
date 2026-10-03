@@ -10,11 +10,18 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { useRemindersStore } from './src/store/useRemindersStore';
 import { syncReminderNotifications } from './src/lib/notifications';
 import { seedShowcase, renameSubject } from './src/dev/showcaseSeed';
+import { useSubjectProfileStore } from './src/store/useSubjectProfileStore';
 
 // Development only: lets the demo data be loaded from a console, without
-// shipping anything to a release build.
+// shipping anything to a release build. The stores are exposed too, so a
+// screen that needs particular data to photograph — a built study plan, say —
+// can be set up without running the generator against it.
 if (__DEV__) {
-  Object.assign(globalThis as Record<string, unknown>, { seedShowcase, renameSubject });
+  Object.assign(globalThis as Record<string, unknown>, {
+    seedShowcase,
+    renameSubject,
+    stores: { subjectProfiles: useSubjectProfileStore },
+  });
 }
 
 export default function App() {
