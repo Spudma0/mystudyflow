@@ -434,7 +434,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nowPillText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  nowPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    // Centring the Text box is not the same as centring what you see in it:
+    // the line box reserves room for descenders, and a time has none, so the
+    // digits ride high. Pinning the line height to the pill and dropping the
+    // extra font padding puts the numerals in the middle of the red.
+    lineHeight: NOW_PILL_H,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
   nowDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 4 },
   nowLine: { flex: 1, height: 1.5, marginLeft: -1 },
   block: {
