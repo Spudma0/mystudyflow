@@ -38,7 +38,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "StudyFlow uses your location to show the current weather on your home screen."
+          "locationWhenInUsePermission": "MyStudyFlow uses your location to show the current weather on your home screen."
         }
       ]
     ],
