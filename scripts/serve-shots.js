@@ -12,7 +12,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', 'assets', 'appstore');
 const PORT = 5056;
 /** Only the two slots being produced, so a typo can't scatter files around. */
-const DIRS = new Set(['iphone-6.5', 'ipad-13']);
+const DIRS = new Set(['iphone-6.5', 'ipad-13', 'iphone-6.5-marketing']);
 
 function save(req, res) {
   let body = '';
