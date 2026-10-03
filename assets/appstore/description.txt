@@ -31,4 +31,4 @@ PHONE AND IPAD
 Everything lives on your account, so your timetable, reminders, study history and colours follow you from one device to the next. The iPad layout uses the extra room rather than stretching the phone one.
 
 YOUR DATA
-Export your planner whenever you like. Delete your account, and everything with it, from inside the app.
+Delete your account, and everything stored with it, from inside the app. No hunting through a website to do it.

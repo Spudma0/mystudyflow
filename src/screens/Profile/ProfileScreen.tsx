@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Linking,
   ScrollView,
   StyleSheet,
   Switch,
@@ -26,17 +27,24 @@ import {
   contrastText,
 } from '../../store/useThemeStore';
 
-const SETTINGS_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { icon: 'notifications-outline', label: 'Notifications' },
-  { icon: 'color-palette-outline', label: 'Theme' },
-  { icon: 'sync-outline', label: 'Timetable Sync' },
-  { icon: 'download-outline', label: 'Export Planner Data' },
-  { icon: 'help-circle-outline', label: 'Help & Support' },
+/** Where to write when something goes wrong. */
+const SUPPORT_EMAIL = 'mystudyflowbusiness@gmail.com';
+
+const SETTINGS_ROWS: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  /** What the row does: open iOS settings, or expand underneath itself. */
+  kind: 'notifications' | 'theme' | 'help';
+}[] = [
+  { icon: 'notifications-outline', label: 'Notifications', kind: 'notifications' },
+  { icon: 'color-palette-outline', label: 'Theme', kind: 'theme' },
+  { icon: 'help-circle-outline', label: 'Help & Support', kind: 'help' },
 ];
 
 export function ProfileScreen() {
   const t = useBaseTheme();
   const [themeExpanded, setThemeExpanded] = useState(false);
+  const [helpExpanded, setHelpExpanded] = useState(false);
   const baseColor = useThemeStore((s) => s.baseColor);
   const setBaseColor = useThemeStore((s) => s.setBaseColor);
   const accentColor = useThemeStore((s) => s.accentColor);
@@ -96,7 +104,9 @@ export function ProfileScreen() {
 
         <View style={[styles.settingsList, { backgroundColor: t.card, borderColor: t.cardBorder }]}>
           {SETTINGS_ROWS.map((row, i) => {
-            const isTheme = row.label === 'Theme';
+            const isTheme = row.kind === 'theme';
+            const isHelp = row.kind === 'help';
+            const expanded = (isTheme && themeExpanded) || (isHelp && helpExpanded);
             return (
               <React.Fragment key={row.label}>
                 <TouchableOpacity
@@ -105,18 +115,43 @@ export function ProfileScreen() {
                     i !== SETTINGS_ROWS.length - 1 && [styles.settingsRowBorder, { borderBottomColor: t.cardBorder }],
                   ]}
                   activeOpacity={0.7}
-                  onPress={isTheme ? () => setThemeExpanded((v) => !v) : undefined}
+                  onPress={
+                    isTheme
+                      ? () => setThemeExpanded((v) => !v)
+                      : isHelp
+                      ? () => setHelpExpanded((v) => !v)
+                      : // Notifications are granted by iOS, not by us, so this
+                        // opens the app's own page in Settings rather than
+                        // pretending to hold a switch we do not own.
+                        () => Linking.openSettings()
+                  }
                 >
                   <View style={[styles.settingsIconWrap, { backgroundColor: t.cardAlt }]}>
                     <Ionicons name={row.icon} size={18} color={t.accentLight} />
                   </View>
                   <Text style={[styles.settingsLabel, { color: t.onCard }]}>{row.label}</Text>
                   <Ionicons
-                    name={isTheme && themeExpanded ? 'chevron-down' : 'chevron-forward'}
+                    name={expanded ? 'chevron-down' : 'chevron-forward'}
                     size={18}
                     color={t.onCardMuted}
                   />
                 </TouchableOpacity>
+
+                {isHelp && helpExpanded && (
+                  <View style={[styles.helpWrap, { borderTopColor: t.cardBorder }]}>
+                    <Text style={[styles.helpText, { color: t.onCardSecondary }]}>
+                      For help and support, get in touch at
+                    </Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+                    >
+                      <Text style={[styles.helpEmail, { color: t.accentLight }]}>
+                        {SUPPORT_EMAIL}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {isTheme && themeExpanded && (
                   <View style={[styles.paletteWrap, { borderBottomColor: t.cardBorder }]}>
@@ -355,6 +390,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  helpWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  helpText: { fontSize: 13.5, lineHeight: 19 },
+  helpEmail: { fontSize: 14.5, fontWeight: '700', marginTop: spacing.xs },
   paletteHint: {
     color: colors.textMuted,
     fontSize: 11,
