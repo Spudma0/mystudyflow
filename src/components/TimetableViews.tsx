@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { radii, spacing } from '../theme/theme';
 import { useBaseTheme } from '../theme/useBaseTheme';
@@ -283,7 +283,12 @@ export function WeekGrid({
 
 const WEEKDAY_HEADS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /** More than this in a cell and the rest become a count. */
-const CHIPS_PER_CELL = 3;
+/** A row never shrinks past this; below it the grid scrolls instead. */
+const MIN_ROW_HEIGHT = 104;
+/** One chip plus the gap under it, used to work out how many fit in a cell. */
+const CHIP_HEIGHT = 20;
+/** The date line at the top of a cell, plus the cell's own padding. */
+const CELL_DATE_HEIGHT = 30;
 
 /** The weeks a month spans, Monday first, including the days either side. */
 export function monthMatrix(month: Date): Date[][] {
@@ -320,6 +325,21 @@ export function MonthGrid({
   const t = useBaseTheme();
   const weeks = useMemo(() => monthMatrix(month), [month]);
 
+  // The grid is given the height it has rather than a fixed row height: a
+  // month is four to six weeks, and on a tablet a fixed height left the
+  // bottom third of the screen empty on the short ones. Rows share the space
+  // and only start scrolling once they would be smaller than MIN_ROW_HEIGHT.
+  const [available, setAvailable] = useState(0);
+  const rowHeight = available
+    ? Math.max(MIN_ROW_HEIGHT, (available - spacing.lg) / weeks.length)
+    : MIN_ROW_HEIGHT;
+
+  // A taller cell should show more of the day, not more empty space.
+  const chipsPerCell = Math.max(
+    2,
+    Math.min(6, Math.floor((rowHeight - CELL_DATE_HEIGHT) / CHIP_HEIGHT))
+  );
+
   return (
     <View style={styles.monthWrap}>
       <View style={styles.monthHeadRow}>
@@ -330,14 +350,17 @@ export function MonthGrid({
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <ScrollView
+        onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
+        contentContainerStyle={{ paddingBottom: spacing.lg }}
+      >
         {weeks.map((week, wi) => (
-          <View key={wi} style={styles.monthRow}>
+          <View key={wi} style={[styles.monthRow, { height: rowHeight }]}>
             {week.map((date) => {
               const inMonth = date.getMonth() === month.getMonth();
               const isToday = isSameDate(date, today);
               const entries = entriesFor(date);
-              const shown = entries.slice(0, CHIPS_PER_CELL);
+              const shown = entries.slice(0, chipsPerCell);
               return (
                 <TouchableOpacity
                   key={date.toISOString()}
@@ -464,11 +487,22 @@ const styles = StyleSheet.create({
   // --- month ---
   monthWrap: { flex: 1 },
   monthHeadRow: { flexDirection: 'row', paddingBottom: spacing.sm },
-  monthHead: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '800', letterSpacing: 0.6 },
+  monthHead: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
   monthRow: { flexDirection: 'row' },
   monthCell: {
     flex: 1,
-    minHeight: 104,
+    // Seven equal columns whatever is in them. Without the zero minimum a
+    // cell is at least as wide as its widest chip, so one "Mathematical
+    // Methods" widens its column and pushes the weekend off the screen.
+    minWidth: 0,
+    // The row sets the height now, so the cell only has to fill it.
     borderWidth: StyleSheet.hairlineWidth,
     padding: 5,
     gap: 3,
@@ -483,7 +517,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   monthChipDot: { width: 5, height: 5, borderRadius: 3 },
-  monthChipText: { flex: 1, fontSize: 10, fontWeight: '700' },
+  // minWidth again, so the title ellipsizes inside the chip rather than
+  // setting the chip's width.
+  monthChipText: { flex: 1, minWidth: 0, fontSize: 10, fontWeight: '700' },
   monthMore: { fontSize: 10, fontWeight: '700', marginTop: 1 },
 
   // --- switcher ---
