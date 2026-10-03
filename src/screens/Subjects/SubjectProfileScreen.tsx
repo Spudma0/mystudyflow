@@ -158,6 +158,8 @@ export function SubjectProfileScreen({ route, navigation }: Props) {
 
       const lessonContent: Record<string, LessonContent> = {};
       const queue = [...map.lessons];
+      /** Kept so a plan that wrote nothing can say why instead of looking built. */
+      let lastFailure: unknown = null;
 
       const worker = async () => {
         for (;;) {
@@ -169,15 +171,26 @@ export function SubjectProfileScreen({ route, navigation }: Props) {
               unitTitle: l.unitTitle,
               topic: l.topic || l.title,
             });
-          } catch {
+          } catch (err) {
             // One lesson failing shouldn't cost them the whole plan — the
             // lesson screen says which are missing and offers a rebuild.
+            lastFailure = err;
           }
           setWritten((n) => n + 1);
         }
       };
 
       await Promise.all([worker(), worker(), worker()]);
+
+      // Every lesson failing is not a plan with gaps in it, it is a plan with
+      // nothing in it — almost always the backend being unreachable. Saving it
+      // would leave a study plan that looks built and opens empty everywhere,
+      // which is exactly the state this used to produce silently.
+      if (map.lessons.length > 0 && Object.keys(lessonContent).length === 0) {
+        throw lastFailure instanceof Error
+          ? lastFailure
+          : new Error('No lessons could be written. Check your connection and try again.');
+      }
 
       saveProfile({
         subjectName,

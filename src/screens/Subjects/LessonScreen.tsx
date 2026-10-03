@@ -17,6 +17,7 @@ import { withAlpha } from '../../store/useThemeStore';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { MathText } from '../../components/MathText';
 import { MathFormula } from '../../components/MathFormula';
+import { StructureDiagram } from '../../components/StructureDiagram';
 import { FunctionGraph } from '../../components/FunctionGraph';
 import { collectFormulas, splitFormulas } from '../../lib/mathNotation';
 import { plottableFrom, wantsGraph } from '../../lib/plot';
@@ -468,7 +469,14 @@ export function LessonScreen({ route, navigation }: Props) {
     ...(content.keyFormulas ?? []),
   ]).slice(0, 3);
 
-  const keyFormulas = content.keyFormulas?.length
+  // An empty array is the model saying this topic has no formulas — an essay,
+  // a history period, a language — so it is taken at its word. Only a missing
+  // field falls back to scraping the body, which is how lessons written before
+  // the model was asked to make that distinction still get their formulas.
+  // Only entries with something to draw; a caption on its own is not a diagram.
+  const structures = (content.structures ?? []).filter((x) => x?.smiles?.trim());
+
+  const keyFormulas = content.keyFormulas
     ? content.keyFormulas
     : collectFormulas([
         ...content.sections.map((s) => s.body),
@@ -567,6 +575,15 @@ export function LessonScreen({ route, navigation }: Props) {
             <Text style={[styles.blockTitle, { color: t.muted }]}>KEY FORMULAS</Text>
             {keyFormulas.map((f, i) => (
               <MathFormula key={i}>{f}</MathFormula>
+            ))}
+          </>
+        )}
+
+        {structures.length > 0 && (
+          <>
+            <Text style={[styles.blockTitle, { color: t.muted }]}>STRUCTURES</Text>
+            {structures.map((structure, i) => (
+              <StructureDiagram key={i} smiles={structure.smiles} caption={structure.caption} />
             ))}
           </>
         )}

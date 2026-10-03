@@ -529,6 +529,7 @@ Return ONLY a JSON object in exactly this shape (no markdown, no commentary):
   "coreTerms": [""],
   "commonMistakes": [""],
   "keyFormulas": [""],
+  "structures": [{ "smiles": "", "caption": "" }],
   "tips": [""],
   "examTips": [""],
   "graphs": [""],
@@ -549,7 +550,8 @@ How to write maths:
 Rules for the three named blocks:
 - "coreTerms": 4-6 entries. The vocabulary and definitions the rest of the lesson depends on, each stated precisely enough to be worth memorising.
 - "commonMistakes": 4-6 entries. What actually trips students up on this topic and how to avoid it — not generic study advice.
-- "keyFormulas": 2-6 entries. Each is a formula on its own and nothing else: "A = A_0 b^(kt)", not "the formula is A = A_0 b^(kt) where A is the amount". No trailing words, no leading words.
+- "structures": only for organic chemistry and only where seeing the skeletal structure is what makes the point — a functional group, an isomer pair, a reaction's product. 0-4 entries, each a valid SMILES string with a short caption naming the molecule. Plain SMILES only, no reaction arrows and no names in the smiles field. Leave it empty for every other subject and for chemistry topics that are not about structure.
+- "keyFormulas": only for topics that genuinely have formulas — maths, physics, chemistry, economics and the like. 2-6 entries, each a formula on its own and nothing else: "A = A_0 b^(kt)", not "the formula is A = A_0 b^(kt) where A is the amount". No trailing words, no leading words. For a topic with no formulas — an English text, a history period, a language, the qualitative parts of biology — return an empty array. Never invent a formula, and never pad the block with definitions or word equations written as if they were formulas.
 
 Rules for the teaching:
 - 3-5 sections that actually teach the idea, in the order it should be learned. Each body is 2-4 short paragraphs of real explanation — define the terms, say why it works, not just what to do. Separate paragraphs with \n\n.

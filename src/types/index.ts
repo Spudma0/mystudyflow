@@ -154,6 +154,8 @@ export interface LessonContent {
   keyFormulas?: string[];
   /** Functions worth seeing plotted, e.g. ["y = x^2", "y = 2x + 3"]. */
   graphs?: string[];
+  /** Molecules worth seeing drawn, as SMILES with a caption. */
+  structures?: { smiles: string; caption: string }[];
 }
 
 /** A question the student kept for another look. */

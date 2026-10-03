@@ -5,6 +5,7 @@ import path from 'node:path';
 import { timetableRouter } from './routes/timetable.js';
 import { subjectRouter } from './routes/subject.js';
 import { accountRouter } from './routes/account.js';
+import { chemRouter } from './routes/chem.js';
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.get('/privacy', (_req, res) => res.sendFile(path.join(publicDir, 'privacy.ht
 app.use('/api/timetable', timetableRouter);
 app.use('/api/subject', subjectRouter);
 app.use('/api/account', accountRouter);
+app.use('/api/chem', chemRouter);
 
 const port = Number(process.env.PORT) || 3000;
 app.listen(port, () => {

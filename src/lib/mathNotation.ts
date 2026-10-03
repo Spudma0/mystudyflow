@@ -1,3 +1,8 @@
+import {
+  looksLikeChemistry,
+  typesetChemistry,
+  typesetChemistryFragments,
+} from './chemNotation';
 /**
  * Parsing for on-paper maths notation.
  *
@@ -358,7 +363,14 @@ function raise(text: string, table: Record<string, string>): string | null {
  * prose breaks the line flow and leaves fragments stranded on their own lines.
  */
 export function typesetMath(source: string): string {
-  return parseMath(source)
+  // As in layoutMath and styleMathRuns: a formula goes by chemistry's rules or
+  // the algebra parser quietly rewrites it — C_nH_(2n+1) comes back as
+  // Cₙₕ₂ₙ₊₁, the subscript having swallowed the hydrogen.
+  if (looksLikeChemistry(source)) return typesetChemistry(source);
+
+  // Prose is still prose, but a formula inside it is chemistry: set those
+  // first, so what reaches the algebra parser has no formulas left in it.
+  return parseMath(typesetChemistryFragments(source))
     .map((node) => {
       switch (node.kind) {
         case 'sup':
@@ -445,6 +457,11 @@ function readCondition(text: string): { condition: string; consumed: number } {
  * rather than degrading to brackets and a slash when it is inline.
  */
 export function layoutMath(source: string): MathPiece[] {
+  // Chemistry is set by its own rules — counts lowered, symbols upright — and
+  // never goes near the algebra parser, which would italicise the elements and
+  // misread C_nH_(2n+1) as nested subscripts.
+  if (looksLikeChemistry(source)) return [{ kind: 'plain', text: typesetChemistry(source) }];
+
   const pieces: MathPiece[] = [];
   const push = (piece: MathPiece) => {
     const last = pieces[pieces.length - 1];
@@ -559,6 +576,12 @@ type Atom = { text: string; math: 'yes' | 'no' | 'maybe'; italic: boolean; space
  * says where the maths in a sentence starts and stops.
  */
 export function styleMathRuns(text: string, forceMath = false): StyledRun[] {
+  // Upright, as a whole: element symbols are not variables, so none of the
+  // per-word italic rules below should see them.
+  if (looksLikeChemistry(text)) {
+    return [{ text: typesetChemistry(text), italic: false, math: true }];
+  }
+
   const atoms = classify(text);
   if (!forceMath) resolveNeutrals(atoms);
 
