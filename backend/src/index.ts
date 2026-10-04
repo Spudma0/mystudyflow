@@ -16,12 +16,13 @@ app.use(express.json({ limit: '25mb' }));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 /**
- * The privacy policy is served from here so it has a public URL the moment the
- * backend is deployed — the App Store listing needs one, and this avoids
- * standing up separate hosting just to serve a single page.
+ * The privacy policy and the support page are served from here so they have
+ * public URLs the moment the backend is deployed — the App Store listing
+ * requires both, and this avoids standing up separate hosting for two pages.
  */
 const publicDir = path.join(__dirname, '..', 'public');
 app.get('/privacy', (_req, res) => res.sendFile(path.join(publicDir, 'privacy.html')));
+app.get('/support', (_req, res) => res.sendFile(path.join(publicDir, 'support.html')));
 
 app.use('/api/timetable', timetableRouter);
 app.use('/api/subject', subjectRouter);
