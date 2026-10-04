@@ -21,6 +21,12 @@ SIZE = 1024
 # mark. The two are concentric in the source artwork; staggering them slightly
 # makes the pair read as an S rather than as one split circle.
 RING_LIFT = 0.045
+
+# The ring's lower end is ragged — the nib used to sit over it, so the artwork
+# never had to finish it cleanly, and lifting the ring exposes the stub. It is
+# cut back to a straight radial edge at this angle, measured anticlockwise from
+# three o'clock.
+RING_CUT_DEG = 203.0
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MARK = os.path.join(ROOT, 'assets', 'logo-mark-dark.png')
 OUT = os.path.join(ROOT, 'assets', 'icon.png')
@@ -88,14 +94,31 @@ def lift_ring(mark, lift_px):
         return mark
     ring_id = max(range(1, current + 1), key=lambda i: int((labels == i).sum()))
 
-    ring_mask = Image.fromarray(((labels == ring_id) * 255).astype(np.uint8), 'L')
+    ring = labels == ring_id
+
+    # Trim the ragged end. The ring and the purple arc together make a full
+    # annulus, so their centroid is its centre, and every ring pixel past the
+    # cut angle is dropped — leaving a straight radial edge where the stub was.
+    r_, g_, b_ = a[..., 0].astype(int), a[..., 1].astype(int), a[..., 2].astype(int)
+    purple = alpha & (r_ > 90) & (r_ < 180) & (g_ < 90) & (b_ > 110)
+    ys, xs = np.where(ring | purple)
+    cy, cx = ys.mean(), xs.mean()
+    yy, xx = np.mgrid[0:H, 0:W]
+    angle = (np.degrees(np.arctan2(-(yy - cy), xx - cx)) + 360) % 360
+    ring = ring & ~((angle > RING_CUT_DEG) & (angle < 300))
+
+    ring_mask = Image.fromarray((ring * 255).astype(np.uint8), 'L')
     ring_mask = ring_mask.filter(ImageFilter.MaxFilter(3))
 
     ring = Image.new('RGBA', mark.size, (0, 0, 0, 0))
     ring.paste(mark, (0, 0), ring_mask)
 
+    # The whole original ring is erased, not just the kept part, so the piece
+    # trimmed off does not stay behind at the old position.
+    full_ring = Image.fromarray(((labels == ring_id) * 255).astype(np.uint8), 'L')
+    full_ring = full_ring.filter(ImageFilter.MaxFilter(3))
     rest = mark.copy()
-    rest.paste((0, 0, 0, 0), (0, 0), ring_mask)
+    rest.paste((0, 0, 0, 0), (0, 0), full_ring)
 
     out = Image.new('RGBA', mark.size, (0, 0, 0, 0))
     out.alpha_composite(ring, (0, -lift_px))
@@ -122,15 +145,23 @@ def build():
     scale = target / max(w, h)
     mark = mark.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
+    # Centre on the artwork's centre of mass, not its bounding box. The pen is
+    # a thin diagonal reaching into a corner, so the box is pulled well off the
+    # weight of the mark and box-centring leaves it sitting high and left.
+    alpha_arr = np.array(mark.split()[3]).astype(float)
+    ys, xs = np.nonzero(alpha_arr > 8)
+    weights = alpha_arr[ys, xs]
+    mass_x = float((xs * weights).sum() / weights.sum())
+    mass_y = float((ys * weights).sum() / weights.sum())
+    offset = (int(SIZE / 2 - mass_x), int(SIZE / 2 - mass_y))
+
     # A shadow under the mark, so it sits on the ground instead of floating.
     shadow = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-    shadow.paste((0, 0, 0, 110), ((SIZE - mark.size[0]) // 2,
-                                  (SIZE - mark.size[1]) // 2 + int(SIZE * 0.012)),
-                 mark)
+    shadow.paste((0, 0, 0, 110), (offset[0], offset[1] + int(SIZE * 0.012)), mark)
     shadow = shadow.filter(ImageFilter.GaussianBlur(SIZE * 0.022))
     canvas.paste(shadow.convert('RGB'), (0, 0), shadow.split()[3])
 
-    canvas.paste(mark, ((SIZE - mark.size[0]) // 2, (SIZE - mark.size[1]) // 2), mark)
+    canvas.paste(mark, offset, mark)
 
     # RGB, no alpha channel: an icon with transparency is rejected.
     canvas.convert('RGB').save(OUT, 'PNG')
