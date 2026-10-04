@@ -31,6 +31,12 @@ SIZE = 1024
 PEN_AXIS_DEG = 44.74
 # How far up the pen the ring is pushed, as a fraction of the mark.
 RING_SLIDE = 0.16
+# The artwork leaves about 11.5px of dark between the ring's cut and the pen —
+# a real gap in the source, not an outline: the pen meets the purple arc with
+# no separation at all. The ring is seated sideways into the pen by more than
+# that, so the two actually touch; the overlap is hidden because the pen is
+# composited over the ring.
+RING_SEAT = 0.028
 
 # The ring's lower end is ragged — the nib used to sit over it, so the artwork
 # never had to finish it cleanly, and lifting the ring exposes the stub. It is
@@ -69,7 +75,7 @@ def bloom_layer(size, cx, cy, radius, colour):
     return layer, mask
 
 
-def slide_ring(mark, slide_px):
+def slide_ring(mark, slide_px, seat_px):
     """
     Push the white ring up the pen, leaving the pen and the purple arc put.
 
@@ -131,12 +137,16 @@ def slide_ring(mark, slide_px):
     rest.paste((0, 0, 0, 0), (0, 0), full_ring)
 
     theta = math.radians(PEN_AXIS_DEG)
-    dx, dy = round(slide_px * math.cos(theta)), -round(slide_px * math.sin(theta))
+    # Along the pen towards the cap, and square across it towards the pen.
+    along = (math.cos(theta), -math.sin(theta))
+    across = (math.sin(theta), math.cos(theta))
+    dx = round(slide_px * along[0] + seat_px * across[0])
+    dy = round(slide_px * along[1] + seat_px * across[1])
 
-    # The ring's top already sits close to the artwork's edge, so the slide is
+    # The ring's top already sits close to the artwork's edge, so the move is
     # made on a canvas grown to take it — otherwise the arc is cut off square
     # against the border, which reads as a flat top rather than as a circle.
-    pad = int(abs(slide_px)) + 8
+    pad = max(abs(dx), abs(dy)) + 8
     W, H = mark.size
     out = Image.new('RGBA', (W + pad * 2, H + pad * 2), (0, 0, 0, 0))
     # paste, not alpha_composite: the latter rejects a negative destination,
@@ -157,7 +167,7 @@ def build():
 
     mark = Image.open(MARK).convert('RGBA')
     slide = float(sys.argv[1]) if len(sys.argv) > 1 else RING_SLIDE
-    mark = slide_ring(mark, mark.size[1] * slide)
+    mark = slide_ring(mark, mark.size[1] * slide, mark.size[1] * RING_SEAT)
     # Trim the transparent margin so the scale below is of the artwork itself
     # rather than of whatever padding the export happened to carry.
     box = mark.split()[3].getbbox()
