@@ -12,15 +12,25 @@ purple arc would vanish on a purple one.
 """
 from PIL import Image, ImageDraw, ImageFilter
 from collections import deque
+import math
 import numpy as np
 import os
 import sys
 
 SIZE = 1024
-# How far the white ring is lifted off the purple arc, as a fraction of the
-# mark. The two are concentric in the source artwork; staggering them slightly
-# makes the pair read as an S rather than as one split circle.
-RING_LIFT = 0.045
+# The ring is displaced along the pen rather than straight up.
+#
+# Its upper end is cut flush against the pen's lower edge in the artwork, so a
+# displacement along that same line slides the end up the pen without opening a
+# gap — any sideways component would pull the cut away from the pen and leave a
+# dark wedge, which is what lifting it vertically used to do. The displacement
+# still staggers the ring against the purple arc, so the pair reads as an S
+# rather than as one split circle.
+#
+# Measured off the cut face itself, anticlockwise from three o'clock.
+PEN_AXIS_DEG = 44.74
+# How far up the pen the ring is pushed, as a fraction of the mark.
+RING_SLIDE = 0.16
 
 # The ring's lower end is ragged — the nib used to sit over it, so the artwork
 # never had to finish it cleanly, and lifting the ring exposes the stub. It is
@@ -59,9 +69,9 @@ def bloom_layer(size, cx, cy, radius, colour):
     return layer, mask
 
 
-def lift_ring(mark, lift_px):
+def slide_ring(mark, slide_px):
     """
-    Raise the white ring, leaving the pen and the purple arc where they are.
+    Push the white ring up the pen, leaving the pen and the purple arc put.
 
     The white in the artwork is several disconnected shapes — the pen is cut
     into pieces where the ring passes behind it — and the ring is the largest
@@ -120,9 +130,22 @@ def lift_ring(mark, lift_px):
     rest = mark.copy()
     rest.paste((0, 0, 0, 0), (0, 0), full_ring)
 
-    out = Image.new('RGBA', mark.size, (0, 0, 0, 0))
-    out.alpha_composite(ring, (0, -lift_px))
-    out.alpha_composite(rest)      # the pen stays on top, as it is drawn
+    theta = math.radians(PEN_AXIS_DEG)
+    dx, dy = round(slide_px * math.cos(theta)), -round(slide_px * math.sin(theta))
+
+    # The ring's top already sits close to the artwork's edge, so the slide is
+    # made on a canvas grown to take it — otherwise the arc is cut off square
+    # against the border, which reads as a flat top rather than as a circle.
+    pad = int(abs(slide_px)) + 8
+    W, H = mark.size
+    out = Image.new('RGBA', (W + pad * 2, H + pad * 2), (0, 0, 0, 0))
+    # paste, not alpha_composite: the latter rejects a negative destination,
+    # and the slide is upwards.
+    moved = Image.new('RGBA', out.size, (0, 0, 0, 0))
+    moved.paste(ring, (pad + dx, pad + dy))
+
+    out.alpha_composite(moved)
+    out.alpha_composite(rest, (pad, pad))   # the pen stays on top, as it is drawn
     return out
 
 
@@ -133,8 +156,8 @@ def build():
         canvas.paste(layer, (0, 0), mask)
 
     mark = Image.open(MARK).convert('RGBA')
-    lift = float(sys.argv[1]) if len(sys.argv) > 1 else RING_LIFT
-    mark = lift_ring(mark, int(mark.size[1] * lift))
+    slide = float(sys.argv[1]) if len(sys.argv) > 1 else RING_SLIDE
+    mark = slide_ring(mark, mark.size[1] * slide)
     # Trim the transparent margin so the scale below is of the artwork itself
     # rather than of whatever padding the export happened to carry.
     box = mark.split()[3].getbbox()
@@ -164,8 +187,9 @@ def build():
     canvas.paste(mark, offset, mark)
 
     # RGB, no alpha channel: an icon with transparency is rejected.
-    canvas.convert('RGB').save(OUT, 'PNG')
-    print(f'wrote {OUT} {canvas.size} {canvas.mode}')
+    out = sys.argv[2] if len(sys.argv) > 2 else OUT
+    canvas.convert('RGB').save(out, 'PNG')
+    print(f'wrote {out} {canvas.size} {canvas.mode}')
 
 
 if __name__ == '__main__':
