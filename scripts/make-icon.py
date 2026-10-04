@@ -23,14 +23,27 @@ SIZE = 1024
 # Its upper end is cut flush against the pen's lower edge in the artwork, so a
 # displacement along that same line slides the end up the pen without opening a
 # gap — any sideways component would pull the cut away from the pen and leave a
-# dark wedge, which is what lifting it vertically used to do. The displacement
-# still staggers the ring against the purple arc, so the pair reads as an S
-# rather than as one split circle.
+# dark wedge, which is what lifting it vertically used to do.
 #
 # Measured off the cut face itself, anticlockwise from three o'clock.
 PEN_AXIS_DEG = 44.74
 # How far up the pen the ring is pushed, as a fraction of the mark.
 RING_SLIDE = 0.16
+# And how far the purple arc drops. The two are halves of one disc in the
+# artwork, which is why they read as a split circle rather than as an S; what
+# an S wants is the bowls stacked, so the arc goes straight down while the ring
+# goes up the pen. Straight down rather than along the pen because sliding them
+# apart along it only makes the pair longer, not stacked — but it does open a
+# dark band where the arc was flush against the pen, which the ring already has
+# at its own end, so the two now read alike.
+ARC_DROP = 0.06
+# The arc's own end, where the nib covered it: clean artwork down to this
+# angle, drawn on from there.
+ARC_CUT_DEG = 255.0
+ARC_FIT_TO = 285.0
+ARC_TAIL_DEG = 229.0
+ARC_TAIL_LAP = 4.0
+ARC_PEN_GAP = 11
 # The ring's lower end is ragged — the nib used to sit over it, so the artwork
 # never had to finish it cleanly, and moving the ring exposes the stub. The
 # artwork is used only as far as this angle, measured anticlockwise from three
@@ -40,7 +53,11 @@ RING_CUT_DEG = 203.0
 # artwork's own end stops short of it, which is what left a wedge of dark
 # between the ring and the pen near the nib. The tail is a continuation of the
 # ring's taper, so it carries no stub, and the pen composites over the overlap.
-RING_TAIL_DEG = 222.0
+# It is swept well past where it meets the pen and then clipped against the pen
+# itself, rather than being stopped on a radius: a radial end crosses the pen's
+# edge obliquely, so its inner corner came out short of the pen and left a
+# notch, which is the gap that survived the first attempt at this.
+RING_TAIL_DEG = 248.0
 # The tail starts this far back from the cut so the two meet with no seam.
 RING_TAIL_LAP = 4.0
 # The taper is fitted over this span of the artwork and extrapolated onwards.
@@ -77,42 +94,79 @@ def bloom_layer(size, cx, cy, radius, colour):
     return layer, mask
 
 
-def tail_mask(ring, radius, angle):
-    """
-    Draw the ring's lower end on, as a continuation of its own taper.
+def shift_mask(mask, dx, dy):
+    """A boolean mask moved by whole pixels, with no wraparound."""
+    out = np.zeros_like(mask)
+    H, W = mask.shape
+    sy0, sy1 = max(0, -dy), min(H, H - dy)
+    sx0, sx1 = max(0, -dx), min(W, W - dx)
+    if sy0 >= sy1 or sx0 >= sx1:
+        return out
+    out[sy0 + dy:sy1 + dy, sx0 + dx:sx1 + dx] = mask[sy0:sy1, sx0:sx1]
+    return out
 
-    The artwork's end is unusable — it was always covered by the nib, so it was
-    left ragged — but the stroke narrows at a steady rate on the way into it,
-    so both edges can be fitted over the last clean stretch and carried round
-    far enough to run under the pen. Without this the ring stops short and
-    leaves a wedge of dark against the pen near the nib.
+
+def pen_side(pen, across, reach):
+    """
+    Everything on the ring's side of the pen, plus the pen itself.
+
+    Built by smearing the pen away from the ring — the union of the pen with
+    every copy of itself stepped back along the ring's direction — so the test
+    follows the pen's real outline, grip and nib included, instead of a single
+    straight edge that those stick out past.
+    """
+    side = pen.copy()
+    for k in range(1, int(reach) + 1):
+        side |= shift_mask(pen, -round(k * across[0]), -round(k * across[1]))
+    return side
+
+
+def drawn_end(arc, radius, angle, fit_lo, fit_hi, start, stop):
+    """
+    Draw an arc's end on, as a continuation of its own taper.
+
+    Both arcs are unusable where the pen crossed them — those stretches were
+    always covered, so they were left ragged, and moving a piece exposes what
+    was hidden. Each stroke narrows at a steady rate on the approach, though,
+    so its two edges can be fitted over the last clean span and carried round
+    far enough to run back under the pen.
+
+    Fitted over [fit_lo, fit_hi]; swept from `start`, which sits inside the
+    artwork being joined to, round to `stop`, which wants to be past the pen.
     """
     rows = []
-    for d in range(int(RING_FIT_FROM), int(RING_CUT_DEG)):
-        sel = ring & (angle >= d) & (angle < d + 1)
+    for d in range(int(fit_lo), int(fit_hi)):
+        sel = arc & (angle >= d) & (angle < d + 1)
         if sel.sum() < 40:
             continue
         rr = radius[sel]
         rows.append((d + 0.5, np.percentile(rr, 1), np.percentile(rr, 99)))
     rows = np.array(rows)
-    inner = np.polyfit(rows[:, 0], rows[:, 1], 1)
-    outer = np.polyfit(rows[:, 0], rows[:, 2], 1)
+    # The line gives the rate the stroke narrows at, but it is pinned to the
+    # artwork's own radii at the angle the two meet: a fit that is a couple of
+    # pixels out there shows up as a jog in the edge at the join.
+    join = fit_hi if stop > fit_hi else fit_lo
+    near = rows[np.argsort(np.abs(rows[:, 0] - join))[:3]]
 
-    a0, a1 = RING_CUT_DEG - RING_TAIL_LAP, RING_TAIL_DEG
-    r_in = np.polyval(inner, angle)
-    r_out = np.polyval(outer, angle)
+    def taper(col):
+        line = np.polyfit(rows[:, 0], rows[:, col], 1)
+        line[1] += np.median(near[:, col]) - np.polyval(line, np.median(near[:, 0]))
+        return line
+
+    inner, outer = taper(1), taper(2)
 
     # Antialiased by distance to each edge: the two radii in pixels directly,
     # the far end as arc length. The near end is left hard, since it is buried
     # under the artwork it is being joined to.
+    reach = (stop - angle) if stop > start else (angle - stop)
     edges = np.minimum.reduce([
-        radius - r_in,
-        r_out - radius,
-        np.radians(a1 - angle) * np.maximum(radius, 1.0),
+        radius - np.polyval(inner, angle),
+        np.polyval(outer, angle) - radius,
+        np.radians(reach) * np.maximum(radius, 1.0),
     ])
     alpha = np.clip(edges + 0.5, 0.0, 1.0)
-    alpha[(angle < a0) | (angle > a1)] = 0.0
-    return Image.fromarray((alpha * 255).astype(np.uint8), 'L')
+    alpha[(angle < min(start, stop)) | (angle > max(start, stop))] = 0.0
+    return (alpha * 255).astype(np.uint8)
 
 
 def slide_ring(mark, slide_px):
@@ -164,40 +218,81 @@ def slide_ring(mark, slide_px):
     angle = (np.degrees(np.arctan2(-(yy - cy), xx - cx)) + 360) % 360
     kept = ring & ~((angle > RING_CUT_DEG) & (angle < 300))
 
-    tail = tail_mask(kept, radius, angle)
+    # The arc is cut back too, for the same reason and at its own end.
+    arc_kept = purple & ~((angle > 180) & (angle < ARC_CUT_DEG))
+
+    theta = math.radians(PEN_AXIS_DEG)
+    dx, dy = round(slide_px * math.cos(theta)), -round(slide_px * math.sin(theta))
+    ax, ay = 0, round(mark.size[1] * ARC_DROP)
+    across = (math.sin(theta), math.cos(theta))     # square across, towards the pen
+    back = (-across[0], -across[1])
+
+    pen = (labels > 0) & ~ring
+    reach = max(H, W) * 0.7
+    # The arc is held off the pen by the width of the artwork's own outline.
+    # The ring may run right into the pen — white into white, so the join does
+    # not show — but purple run up to the nib would rub out the dark edge round
+    # it, and fill the hole in it besides.
+    fat = np.array(Image.fromarray((pen * 255).astype(np.uint8), 'L')
+                   .filter(ImageFilter.MaxFilter(int(ARC_PEN_GAP) * 2 + 1))) > 127
+    # Each drawn end is clipped in its own piece's frame, so the pen's reach is
+    # stepped back by the move that piece is about to make. The ring lives on
+    # one side of the pen and the arc on the other, hence the opposite tests.
+    ring_side = shift_mask(pen_side(pen, across, reach), -dx, -dy)
+    # The arc is not held to one side of the pen: its end runs on past the nib
+    # and finishes at the lower left, which is where an S puts it, and reads
+    # as passing behind. Only the pen and its outline are punched out of it.
+    arc_side = ~shift_mask(fat, -ax, -ay)
+
+    tail = drawn_end(kept, radius, angle,
+                     RING_FIT_FROM, RING_CUT_DEG,
+                     RING_CUT_DEG - RING_TAIL_LAP, RING_TAIL_DEG)
+    tail[~ring_side] = 0
+
+    arc_tail = drawn_end(arc_kept, radius, angle,
+                         ARC_CUT_DEG, ARC_FIT_TO,
+                         ARC_CUT_DEG + ARC_TAIL_LAP, ARC_TAIL_DEG)
+    arc_tail[~arc_side] = 0
 
     ring_mask = Image.fromarray((kept * 255).astype(np.uint8), 'L')
     ring_mask = ring_mask.filter(ImageFilter.MaxFilter(3))
 
     ring = Image.new('RGBA', mark.size, (0, 0, 0, 0))
     ring.paste(mark, (0, 0), ring_mask)
-    # Solid white, because there is nothing to borrow from the artwork here —
+    # Solid colour, because there is nothing to borrow from the artwork here —
     # these pixels are the pen's in the source.
-    ring.paste((255, 255, 255, 255), (0, 0), tail)
+    ring.paste((255, 255, 255, 255), (0, 0), Image.fromarray(tail, 'L'))
 
-    # The whole original ring is erased, not just the kept part, so the piece
-    # trimmed off does not stay behind at the old position.
-    full_ring = Image.fromarray(((labels == ring_id) * 255).astype(np.uint8), 'L')
-    full_ring = full_ring.filter(ImageFilter.MaxFilter(3))
-    rest = mark.copy()
-    rest.paste((0, 0, 0, 0), (0, 0), full_ring)
+    # The arc gets its own move, down the pen rather than up it. Driving the
+    # two apart along the pen is what turns a disc split in half into an S:
+    # the bowls stop being concentric and slide past one another.
+    arc_mask = Image.fromarray((arc_kept * 255).astype(np.uint8), 'L')
+    arc_mask = arc_mask.filter(ImageFilter.MaxFilter(3))
+    arc = Image.new('RGBA', mark.size, (0, 0, 0, 0))
+    arc.paste(mark, (0, 0), arc_mask)
+    shade = tuple(int(v) for v in np.median(a[purple], axis=0))
+    arc.paste(shade, (0, 0), Image.fromarray(arc_tail, 'L'))
 
-    theta = math.radians(PEN_AXIS_DEG)
-    dx, dy = round(slide_px * math.cos(theta)), -round(slide_px * math.sin(theta))
+    # What is left is the pen, which does not move: the whole original ring is
+    # erased, not just the kept part, so the piece trimmed off does not stay
+    # behind at the old position.
+    gone = Image.fromarray((((labels == ring_id) | purple) * 255).astype(np.uint8), 'L')
+    gone = gone.filter(ImageFilter.MaxFilter(3))
+    pen = mark.copy()
+    pen.paste((0, 0, 0, 0), (0, 0), gone)
 
     # The ring's top already sits close to the artwork's edge, so the move is
     # made on a canvas grown to take it — otherwise the arc is cut off square
     # against the border, which reads as a flat top rather than as a circle.
-    pad = max(abs(dx), abs(dy)) + 8
+    pad = max(abs(dx), abs(dy), abs(ax), abs(ay)) + 8
     W, H = mark.size
     out = Image.new('RGBA', (W + pad * 2, H + pad * 2), (0, 0, 0, 0))
     # paste, not alpha_composite: the latter rejects a negative destination,
-    # and the slide is upwards.
-    moved = Image.new('RGBA', out.size, (0, 0, 0, 0))
-    moved.paste(ring, (pad + dx, pad + dy))
-
-    out.alpha_composite(moved)
-    out.alpha_composite(rest, (pad, pad))   # the pen stays on top, as it is drawn
+    # and the slides go in opposite directions.
+    for layer, (ox, oy) in ((ring, (dx, dy)), (arc, (ax, ay)), (pen, (0, 0))):
+        moved = Image.new('RGBA', out.size, (0, 0, 0, 0))
+        moved.paste(layer, (pad + ox, pad + oy))
+        out.alpha_composite(moved)          # the pen last, as it is drawn on top
     return out
 
 
