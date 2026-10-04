@@ -25,13 +25,23 @@ import sys
 SIZE = 1024
 
 # The pen's axis, measured off the straight edge where the artwork cuts the
-# ring against it, anticlockwise from three o'clock. The arcs are split along
-# this line, so the join between them is hidden under the pen.
+# ring against it, anticlockwise from three o'clock. Each arc is swept to this
+# line at the cap end, so where it stops is hidden under the pen.
 PEN_AXIS_DEG = 44.74
-# The redrawn annulus, in the artwork's own pixels. Taken from the widest clean
-# stretch of each arc; the difference is the stroke width the logo is drawn at.
-R_OUT = 231.0
-R_IN = 121.0
+
+# Each arc is redrawn, but as the tapering spiral the artwork actually draws
+# rather than as a plain annulus: the stroke's outer radius runs from 231px
+# down to 169px and its inner one with it, and flattening that to one radius
+# loses the shape. Both edges are fitted as cubics in the angle over the span
+# of the artwork that is clean, then swept across the whole arc.
+#
+# Fitted over, and swept between — degrees, anticlockwise from three o'clock.
+# The arc's angles run on past 360 so its sweep through zero stays monotonic.
+RING_FIT = (50.0, 200.0)
+RING_SWEEP = (PEN_AXIS_DEG, 250.0)
+ARC_FIT = (255.0, 375.0)
+ARC_SWEEP = (229.0, 360.0 + PEN_AXIS_DEG)
+TAPER_DEGREE = 3
 
 # The ring is displaced along the pen, the arc straight down.
 #
@@ -42,15 +52,13 @@ R_IN = 121.0
 # makes the pair longer.
 RING_SLIDE = 0.16
 ARC_DROP = 0.06
-# The whole mark is turned this far anticlockwise at the end.
-ROTATE_DEG = 15.0
 # How far each arc is held off the pen, matching the dark edge the artwork
-# draws elsewhere. The ring's lower end is exempt: it runs under the pen so the
-# two meet, which is invisible anyway, both being white.
+# already leaves between the ring and the pen at the cap end.
 PEN_GAP = 11
 # The arcs are drawn at this multiple of the artwork's resolution and brought
-# back down at the end, which is what keeps their edges clean through the
-# rotation.
+# back down at the end. Drawn at the final size, an edge carries a single pixel
+# of ramp and comes out ragged; drawn large and resampled, the ramp is averaged
+# over many samples and the curve is clean.
 SUPERSAMPLE = 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -118,17 +126,42 @@ def shift_mask(mask, dx, dy):
     return out
 
 
-def half_annulus(radius, side, keep_positive, scale=1.0):
-    """
-    One half of a true annulus, antialiased.
+def fit_taper(mask, radius, angle, span):
+    """How the arc's two radii run with the angle, over a clean span of it."""
+    rows = []
+    for d in range(int(span[0]), int(span[1])):
+        sel = mask & (angle >= d) & (angle < d + 1)
+        if sel.sum() < 40:
+            continue
+        rr = radius[sel]
+        rows.append((d + 0.5, np.percentile(rr, 1), np.percentile(rr, 99)))
+    rows = np.array(rows)
+    return (np.polyfit(rows[:, 0], rows[:, 1], TAPER_DEGREE),
+            np.polyfit(rows[:, 0], rows[:, 2], TAPER_DEGREE))
 
-    `side` is signed distance square across the pen, so the split runs along
-    the pen's own axis. Each edge contributes its distance in pixels and the
-    nearest one wins, which gives a clean one-pixel ramp all the way round.
+
+def spiral(radius, angle, taper, fit, sweep, scale):
     """
-    signed = side if keep_positive else -side
-    edges = np.minimum.reduce([radius - R_IN * scale, R_OUT * scale - radius, signed])
-    # Half a pixel of ramp, in whatever pixels the caller is working in.
+    One tapering arc, antialiased.
+
+    Each of the four edges — the two radii and the two ends — contributes its
+    distance to the boundary in pixels and the nearest one wins, which gives a
+    clean one-pixel ramp the whole way round. Distances along the arc are arc
+    lengths, so the ends ramp at the same rate as the sides.
+    """
+    inner, outer = taper
+    # Held to the span the taper was measured over, and carried on at a
+    # constant width past it. A cubic run even a little outside its own data
+    # leaves the rails entirely: a few degrees past the end of the arc it puts
+    # the stroke at twice its width, which showed up as a wedge off the tail.
+    # The fit is in the artwork's pixels; the drawing may not be.
+    held = np.clip(angle, fit[0], fit[1])
+    edges = np.minimum.reduce([
+        radius - np.polyval(inner, held) * scale,
+        np.polyval(outer, held) * scale - radius,
+        np.radians(angle - sweep[0]) * np.maximum(radius, 1.0),
+        np.radians(sweep[1] - angle) * np.maximum(radius, 1.0),
+    ])
     return np.clip(edges + 0.5, 0.0, 1.0)
 
 
@@ -159,11 +192,16 @@ def build_mark(source):
     # its centre.
     ys, xs = np.where((labels == ring_id) | purple)
     cy, cx = ys.mean(), xs.mean()
-    # The arcs are analytic, so they are worked out at several times the
-    # artwork's resolution and come back down at the end. An edge drawn at the
-    # final size carries a single pixel of ramp, and the rotation then smears
-    # that into a staircase; drawn large and resampled, the ramp is averaged
-    # from many samples and the curve comes out smooth.
+    # The taper is measured off the artwork at its own resolution ...
+    yy, xx = np.mgrid[0:H, 0:W]
+    radius1 = np.hypot(xx - cx, yy - cy)
+    angle1 = (np.degrees(np.arctan2(-(yy - cy), xx - cx)) + 360) % 360
+    ring_taper = fit_taper(labels == ring_id, radius1, angle1, RING_FIT)
+    # Unwrapped past 360, so the arc's sweep through zero stays monotonic.
+    arc_taper = fit_taper(purple, radius1, np.where(angle1 < 180, angle1 + 360, angle1),
+                          ARC_FIT)
+
+    # ... and the arcs are then drawn several times larger than that.
     S = SUPERSAMPLE
     theta = math.radians(PEN_AXIS_DEG)
     along = (math.cos(theta), -math.sin(theta))
@@ -173,6 +211,7 @@ def build_mark(source):
     xx = (xx + 0.5) / S
     yy = (yy + 0.5) / S
     radius = np.hypot(xx - cx, yy - cy) * S
+    angle = (np.degrees(np.arctan2(-(yy - cy), xx - cx)) + 360) % 360
     side = ((xx - cx) * across[0] + (yy - cy) * across[1]) * S
 
     span = source.size[1]
@@ -190,11 +229,21 @@ def build_mark(source):
     fat = fat.filter(ImageFilter.GaussianBlur(S * 0.8))
     fat = np.array(fat).astype(float) / 255.0
 
-    # Both arcs are held off the pen, at both of their ends.
-    ring = half_annulus(radius, side, keep_positive=False, scale=S)
-    ring = ring * (1.0 - shift_soft(fat, -dx * S, -dy * S))
+    # Both arcs are held off the pen, at both of their ends. The ring is also
+    # kept to its own side of the pen's centre line: it is swept well past the
+    # nib so that the pen is what decides where it stops, and without this it
+    # would reappear out of the far side. Anything the line leaves between the
+    # pen's edge and its centre is under the pen, so it never shows.
+    # Shifted by arithmetic, not by moving the array: `side` is a coordinate,
+    # not a mask, so sliding it would leave zeros where it ran off the edge.
+    lean = (dx * across[0] + dy * across[1]) * S
+    near = np.clip(0.5 - (side + lean), 0.0, 1.0)
 
-    arc = half_annulus(radius, side, keep_positive=True, scale=S)
+    ring = spiral(radius, angle, ring_taper, RING_FIT, RING_SWEEP, S)
+    ring = ring * (1.0 - shift_soft(fat, -dx * S, -dy * S)) * near
+
+    arc_angle = np.where(angle < 180, angle + 360, angle)
+    arc = spiral(radius, arc_angle, arc_taper, ARC_FIT, ARC_SWEEP, S)
     arc = arc * (1.0 - shift_soft(fat, -ax * S, -ay * S))
 
     shade = tuple(int(v) for v in np.median(a[purple], axis=0))
@@ -244,10 +293,8 @@ def build():
         canvas.paste(layer, (0, 0), mask)
 
     mark = build_mark(Image.open(MARK).convert('RGBA'))
-    # Positive is anticlockwise.
-    mark = mark.rotate(ROTATE_DEG, resample=Image.BICUBIC, expand=True)
     # Trim the transparent margin so the scale below is of the artwork itself
-    # rather than of whatever padding the rotation happened to add.
+    # rather than of whatever padding it was drawn with.
     mark = mark.crop(mark.split()[3].getbbox())
 
     target = int(SIZE * 0.70)
