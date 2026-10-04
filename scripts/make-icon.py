@@ -48,6 +48,10 @@ ROTATE_DEG = 15.0
 # draws elsewhere. The ring's lower end is exempt: it runs under the pen so the
 # two meet, which is invisible anyway, both being white.
 PEN_GAP = 11
+# The arcs are drawn at this multiple of the artwork's resolution and brought
+# back down at the end, which is what keeps their edges clean through the
+# rotation.
+SUPERSAMPLE = 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MARK = os.path.join(ROOT, 'assets', 'logo-mark-dark.png')
@@ -114,7 +118,7 @@ def shift_mask(mask, dx, dy):
     return out
 
 
-def half_annulus(radius, side, keep_positive):
+def half_annulus(radius, side, keep_positive, scale=1.0):
     """
     One half of a true annulus, antialiased.
 
@@ -123,7 +127,8 @@ def half_annulus(radius, side, keep_positive):
     nearest one wins, which gives a clean one-pixel ramp all the way round.
     """
     signed = side if keep_positive else -side
-    edges = np.minimum.reduce([radius - R_IN, R_OUT - radius, signed])
+    edges = np.minimum.reduce([radius - R_IN * scale, R_OUT * scale - radius, signed])
+    # Half a pixel of ramp, in whatever pixels the caller is working in.
     return np.clip(edges + 0.5, 0.0, 1.0)
 
 
@@ -154,14 +159,21 @@ def build_mark(source):
     # its centre.
     ys, xs = np.where((labels == ring_id) | purple)
     cy, cx = ys.mean(), xs.mean()
-    yy, xx = np.mgrid[0:H, 0:W]
-    radius = np.hypot(xx - cx, yy - cy)
-
+    # The arcs are analytic, so they are worked out at several times the
+    # artwork's resolution and come back down at the end. An edge drawn at the
+    # final size carries a single pixel of ramp, and the rotation then smears
+    # that into a staircase; drawn large and resampled, the ramp is averaged
+    # from many samples and the curve comes out smooth.
+    S = SUPERSAMPLE
     theta = math.radians(PEN_AXIS_DEG)
     along = (math.cos(theta), -math.sin(theta))
     across = (math.sin(theta), math.cos(theta))     # towards the pen, from the ring
-    side = (xx - cx) * across[0] + (yy - cy) * across[1]
-    down_pen = (xx - cx) * along[0] + (yy - cy) * along[1]
+
+    yy, xx = np.mgrid[0:H * S, 0:W * S]
+    xx = (xx + 0.5) / S
+    yy = (yy + 0.5) / S
+    radius = np.hypot(xx - cx, yy - cy) * S
+    side = ((xx - cx) * across[0] + (yy - cy) * across[1]) * S
 
     span = source.size[1]
     dx, dy = round(span * RING_SLIDE * along[0]), round(span * RING_SLIDE * along[1])
@@ -171,27 +183,29 @@ def build_mark(source):
     # arcs are cut against it without a staircase.
     fat = Image.fromarray((pen * 255).astype(np.uint8), 'L')
     fat = fat.filter(ImageFilter.MaxFilter(PEN_GAP * 2 + 1))
-    fat = np.array(fat.filter(ImageFilter.GaussianBlur(0.6))).astype(float) / 255.0
+    fat = fat.resize((W * S, H * S), Image.BILINEAR)
+    # Blurred after the enlargement, not before: the pen's outline is only
+    # known to the artwork's pixel grid, and the staircase in it shows up in
+    # the edge it cuts the arcs against.
+    fat = fat.filter(ImageFilter.GaussianBlur(S * 0.8))
+    fat = np.array(fat).astype(float) / 255.0
 
-    ring = half_annulus(radius, side, keep_positive=False)
-    # Held off the pen at the cap end only. At the nib end the ring runs on
-    # under the pen, which is what makes the two meet there with no gap; the
-    # step between the two rules falls inside the ring's hole, so it never
-    # shows.
-    cap = np.where(down_pen > 0, 1.0 - shift_soft(fat, -dx, -dy), 1.0)
-    ring = ring * cap
+    # Both arcs are held off the pen, at both of their ends.
+    ring = half_annulus(radius, side, keep_positive=False, scale=S)
+    ring = ring * (1.0 - shift_soft(fat, -dx * S, -dy * S))
 
-    arc = half_annulus(radius, side, keep_positive=True)
-    arc = arc * (1.0 - shift_soft(fat, -ax, -ay))
+    arc = half_annulus(radius, side, keep_positive=True, scale=S)
+    arc = arc * (1.0 - shift_soft(fat, -ax * S, -ay * S))
 
     shade = tuple(int(v) for v in np.median(a[purple], axis=0))
     pen_layer = mark.copy()
     keep = Image.fromarray((pen * 255).astype(np.uint8), 'L')
     pen_layer.putalpha(Image.fromarray(
         (np.array(mark.split()[3]).astype(float) * (np.array(keep) > 0)).astype(np.uint8), 'L'))
+    pen_layer = pen_layer.resize((W * S, H * S), Image.LANCZOS)
 
-    pad = max(abs(dx), abs(dy), abs(ax), abs(ay)) + 8
-    out = Image.new('RGBA', (W + pad * 2, H + pad * 2), (0, 0, 0, 0))
+    pad = (max(abs(dx), abs(dy), abs(ax), abs(ay)) + 8) * S
+    out = Image.new('RGBA', (W * S + pad * 2, H * S + pad * 2), (0, 0, 0, 0))
     layers = (
         (solid((255, 255, 255, 255), ring), (dx, dy)),
         (solid(shade, arc), (ax, ay)),
