@@ -31,18 +31,20 @@ SIZE = 1024
 PEN_AXIS_DEG = 44.74
 # How far up the pen the ring is pushed, as a fraction of the mark.
 RING_SLIDE = 0.16
-# The artwork leaves about 11.5px of dark between the ring's cut and the pen —
-# a real gap in the source, not an outline: the pen meets the purple arc with
-# no separation at all. The ring is seated sideways into the pen by more than
-# that, so the two actually touch; the overlap is hidden because the pen is
-# composited over the ring.
-RING_SEAT = 0.028
-
 # The ring's lower end is ragged — the nib used to sit over it, so the artwork
-# never had to finish it cleanly, and lifting the ring exposes the stub. It is
-# cut back to a straight radial edge at this angle, measured anticlockwise from
-# three o'clock.
+# never had to finish it cleanly, and moving the ring exposes the stub. The
+# artwork is used only as far as this angle, measured anticlockwise from three
+# o'clock, and the rest of the end is drawn rather than borrowed.
 RING_CUT_DEG = 203.0
+# Drawn on to this angle, which is far enough round to run under the pen: the
+# artwork's own end stops short of it, which is what left a wedge of dark
+# between the ring and the pen near the nib. The tail is a continuation of the
+# ring's taper, so it carries no stub, and the pen composites over the overlap.
+RING_TAIL_DEG = 222.0
+# The tail starts this far back from the cut so the two meet with no seam.
+RING_TAIL_LAP = 4.0
+# The taper is fitted over this span of the artwork and extrapolated onwards.
+RING_FIT_FROM = 170.0
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MARK = os.path.join(ROOT, 'assets', 'logo-mark-dark.png')
 OUT = os.path.join(ROOT, 'assets', 'icon.png')
@@ -75,7 +77,45 @@ def bloom_layer(size, cx, cy, radius, colour):
     return layer, mask
 
 
-def slide_ring(mark, slide_px, seat_px):
+def tail_mask(ring, radius, angle):
+    """
+    Draw the ring's lower end on, as a continuation of its own taper.
+
+    The artwork's end is unusable — it was always covered by the nib, so it was
+    left ragged — but the stroke narrows at a steady rate on the way into it,
+    so both edges can be fitted over the last clean stretch and carried round
+    far enough to run under the pen. Without this the ring stops short and
+    leaves a wedge of dark against the pen near the nib.
+    """
+    rows = []
+    for d in range(int(RING_FIT_FROM), int(RING_CUT_DEG)):
+        sel = ring & (angle >= d) & (angle < d + 1)
+        if sel.sum() < 40:
+            continue
+        rr = radius[sel]
+        rows.append((d + 0.5, np.percentile(rr, 1), np.percentile(rr, 99)))
+    rows = np.array(rows)
+    inner = np.polyfit(rows[:, 0], rows[:, 1], 1)
+    outer = np.polyfit(rows[:, 0], rows[:, 2], 1)
+
+    a0, a1 = RING_CUT_DEG - RING_TAIL_LAP, RING_TAIL_DEG
+    r_in = np.polyval(inner, angle)
+    r_out = np.polyval(outer, angle)
+
+    # Antialiased by distance to each edge: the two radii in pixels directly,
+    # the far end as arc length. The near end is left hard, since it is buried
+    # under the artwork it is being joined to.
+    edges = np.minimum.reduce([
+        radius - r_in,
+        r_out - radius,
+        np.radians(a1 - angle) * np.maximum(radius, 1.0),
+    ])
+    alpha = np.clip(edges + 0.5, 0.0, 1.0)
+    alpha[(angle < a0) | (angle > a1)] = 0.0
+    return Image.fromarray((alpha * 255).astype(np.uint8), 'L')
+
+
+def slide_ring(mark, slide_px):
     """
     Push the white ring up the pen, leaving the pen and the purple arc put.
 
@@ -112,22 +152,28 @@ def slide_ring(mark, slide_px, seat_px):
 
     ring = labels == ring_id
 
-    # Trim the ragged end. The ring and the purple arc together make a full
+    # Drop the ragged end. The ring and the purple arc together make a full
     # annulus, so their centroid is its centre, and every ring pixel past the
-    # cut angle is dropped — leaving a straight radial edge where the stub was.
+    # cut angle goes.
     r_, g_, b_ = a[..., 0].astype(int), a[..., 1].astype(int), a[..., 2].astype(int)
     purple = alpha & (r_ > 90) & (r_ < 180) & (g_ < 90) & (b_ > 110)
     ys, xs = np.where(ring | purple)
     cy, cx = ys.mean(), xs.mean()
     yy, xx = np.mgrid[0:H, 0:W]
+    radius = np.hypot(xx - cx, yy - cy)
     angle = (np.degrees(np.arctan2(-(yy - cy), xx - cx)) + 360) % 360
-    ring = ring & ~((angle > RING_CUT_DEG) & (angle < 300))
+    kept = ring & ~((angle > RING_CUT_DEG) & (angle < 300))
 
-    ring_mask = Image.fromarray((ring * 255).astype(np.uint8), 'L')
+    tail = tail_mask(kept, radius, angle)
+
+    ring_mask = Image.fromarray((kept * 255).astype(np.uint8), 'L')
     ring_mask = ring_mask.filter(ImageFilter.MaxFilter(3))
 
     ring = Image.new('RGBA', mark.size, (0, 0, 0, 0))
     ring.paste(mark, (0, 0), ring_mask)
+    # Solid white, because there is nothing to borrow from the artwork here —
+    # these pixels are the pen's in the source.
+    ring.paste((255, 255, 255, 255), (0, 0), tail)
 
     # The whole original ring is erased, not just the kept part, so the piece
     # trimmed off does not stay behind at the old position.
@@ -137,11 +183,7 @@ def slide_ring(mark, slide_px, seat_px):
     rest.paste((0, 0, 0, 0), (0, 0), full_ring)
 
     theta = math.radians(PEN_AXIS_DEG)
-    # Along the pen towards the cap, and square across it towards the pen.
-    along = (math.cos(theta), -math.sin(theta))
-    across = (math.sin(theta), math.cos(theta))
-    dx = round(slide_px * along[0] + seat_px * across[0])
-    dy = round(slide_px * along[1] + seat_px * across[1])
+    dx, dy = round(slide_px * math.cos(theta)), -round(slide_px * math.sin(theta))
 
     # The ring's top already sits close to the artwork's edge, so the move is
     # made on a canvas grown to take it — otherwise the arc is cut off square
@@ -167,7 +209,7 @@ def build():
 
     mark = Image.open(MARK).convert('RGBA')
     slide = float(sys.argv[1]) if len(sys.argv) > 1 else RING_SLIDE
-    mark = slide_ring(mark, mark.size[1] * slide, mark.size[1] * RING_SEAT)
+    mark = slide_ring(mark, mark.size[1] * slide)
     # Trim the transparent margin so the scale below is of the artwork itself
     # rather than of whatever padding the export happened to carry.
     box = mark.split()[3].getbbox()
