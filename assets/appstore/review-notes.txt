@@ -1,0 +1,73 @@
+MyStudyFlow turns a student's school timetable into a study plan: it tracks
+classes and deadlines, logs study time per subject, and writes a full set of
+lessons for a subject from the textbook that subject is taught from.
+
+The demo account is already populated with a timetable, reminders, study
+history and a custom theme, so most of the app can be reviewed immediately.
+
+
+STUDY PLANS ARE BUILT ON DEMAND -- PLEASE BUILD ONLY ONE
+
+The demo account deliberately ships without generated study plans. To review
+that part of the app please build one, and only one.
+
+Each build is a long chain of model calls billed to us: one research pass to
+identify the textbook and work out the course, then one write per lesson in
+the resulting plan, typically 10 to 20 of them. Building plans for several
+subjects in a row can exhaust our rate limit and start returning errors --
+that is our quota, not a defect in the app.
+
+
+HOW TO BUILD ONE (about 5 minutes end to end)
+
+1. Subjects tab, then Mathematical Methods, then Build study profile.
+
+2. Textbook step. Enter:
+     Title:   Mathematical Methods VCE Units 3&4
+     Author:  Michael Evans, Kay Lipson, David Greenwood
+     Edition: 2nd
+   Tap "Scan this textbook". This searches the web to identify the book and
+   work out what the course covers. It can take up to three minutes. Please
+   do not cancel it -- a long wait here is normal, not a hang.
+
+3. Scan step. The identified book and its units are listed. Tap "Looks right".
+
+4. Test step. Either branch is worth seeing; pick one:
+     - "Yes, I have a test"  -> What's it on: Arithmetic and geometric
+       sequences. Pick any date a couple of weeks out. Choose "Yes, from the
+       book". The whole plan is then aimed at that test.
+     - "Not right now"  -> choose one of the suggested areas, or type
+       "Differentiation from first principles". The plan becomes an intensive
+       deep dive on that area instead.
+
+5. Tap "Build my lesson map". A counter shows each lesson being written. This
+   takes a few minutes; please stay on the screen until it completes.
+
+6. Open the subject to see the finished lesson map, tap any lesson to read it,
+   and use "Start 12 questions" to see the question set and marking.
+
+
+PERMISSIONS -- BOTH OPTIONAL
+
+Location is used only to show local weather on the home screen. Notifications
+are used only for reminders the user sets. Decline either and the app works
+normally; neither gates any feature.
+
+
+OTHER THINGS TO KNOW
+
+- Lesson content is written by a language model. The app says so, as does the
+  support page. It is study material, not assessment, and we tell students to
+  check anything that matters against their own course material.
+
+- There are no purchases of any kind in this version. No paywall, no
+  subscription, no payment details are collected anywhere in the app.
+
+- Account deletion is in the app: Profile, then Delete Account. It removes the
+  account and everything stored against it.
+
+- Support:  https://mystudyflow-production.up.railway.app/support
+  Privacy:  https://mystudyflow-production.up.railway.app/privacy
+
+If the backend is unreachable or a generation fails repeatedly, please email
+mystudyflowbusiness@gmail.com and we will fix it the same day.
