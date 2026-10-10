@@ -56,7 +56,22 @@ def compose(white, purple, light):
     return out
 
 
-def downsize(rgba, size):
+def cropped(rgba, long_side):
+    """
+    The mark alone, trimmed of margin at full resolution and then brought down.
+
+    Trimming after the resize would throw away most of the resolution asked
+    for — the mark covers about two thirds of the artwork, so a 512 square
+    cropped to its contents is barely 300 across.
+    """
+    ys, xs = np.nonzero(rgba[..., 3] > 0)
+    box = rgba[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    h, w = box.shape[:2]
+    scale = long_side / max(w, h)
+    return downsize(box, max(1, round(w * scale)), max(1, round(h * scale)))
+
+
+def downsize(rgba, size, height=None):
     """
     Resize an RGBA array, premultiplied.
 
@@ -68,9 +83,11 @@ def downsize(rgba, size):
     alpha = rgba[..., 3:4] / 255.0
     premul = rgba[..., :3] * alpha
 
+    target = (size, size if height is None else height)
+
     def shrink(plane):
         return np.array(Image.fromarray(plane.astype(np.float32), 'F')
-                        .resize((size, size), Image.LANCZOS))
+                        .resize(target, Image.LANCZOS))
 
     small = np.dstack([shrink(premul[..., i]) for i in range(3)])
     small_a = shrink(alpha[..., 0])
@@ -154,9 +171,12 @@ def main():
     save('favicon.png', source.resize((48, 48), Image.LANCZOS))
 
     # The welcome screen shows the mark alone, in whichever of the two reads
-    # against the theme.
-    save('logo-mark-dark.png', downsize(dark_mark, 512))
-    save('logo-mark-light.png', downsize(light_mark, 512))
+    # against the theme. Trimmed to the mark itself: it is drawn into a fixed
+    # box there with resizeMode="contain", so any margin carried over from the
+    # artwork is margin the box spends on nothing, and the mark comes out
+    # smaller than the one it replaces.
+    save('logo-mark-dark.png', cropped(dark_mark, 512))
+    save('logo-mark-light.png', cropped(light_mark, 512))
 
     save('android-icon-foreground.png', fit(downsize(dark_mark, 1024), 512, ANDROID_SAFE))
     save('android-icon-background.png', ground(rgb, covered, 512))
@@ -168,8 +188,7 @@ def main():
 
     # The promo card template is served from its own folder, so it gets its
     # own copy of the mark rather than reaching up out of the web root.
-    promo = downsize(dark_mark, 256)
-    promo = promo.crop(promo.split()[3].getbbox())
+    promo = cropped(dark_mark, 256)
     promo.save(os.path.join(ASSETS, 'promo', 'logo-mark.png'))
     wrote.append(f'promo/logo-mark.png {promo.size[0]}x{promo.size[1]} {promo.mode}')
 
