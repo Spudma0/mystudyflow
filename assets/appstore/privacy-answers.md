@@ -21,7 +21,7 @@ Two facts decide most of the answers:
 | Contact Info → **Name** | Linked | App Functionality | `full_name` on the profile, set during setup |
 | Identifiers → **User ID** | Linked | App Functionality | Supabase user id |
 | Location → **Coarse Location** | **Not** linked | App Functionality | Weather widget |
-| User Content → **Photos or Videos** | **Not** linked | App Functionality | Timetable import |
+| User Content → **Photos or Videos** | Linked | App Functionality | Timetable import |
 | User Content → **Other User Content** | Linked | App Functionality | Timetable, subjects, reminders, study sessions, study plans, textbook details, school and year level, theme |
 
 ## Leave everything else unticked
@@ -42,10 +42,20 @@ before anything leaves the device, and sends no account details with it.
 Declaring Precise here would be wrong, and it is the usual place apps
 over-declare.
 
-**Photos are collected even though nothing is kept.** The timetable image goes
-to the backend and on to the model to be read. It is processed in memory and
-discarded, and the route persists nothing, but it still left the device, so it
-is collected. Not linked, because the request carries no identity.
+**Photos are collected even though nothing is kept, and they are linked.** The
+timetable image goes to the backend and on to the model to be read. It is
+processed in memory and discarded, and the route persists nothing, but it
+still left the device, so it is collected.
+
+Linked is the answer despite the request carrying no account id, because
+Apple's test is whether direct identifiers were stripped *before* collection,
+not whether the data was retained or tied to an account afterwards. A school
+timetable usually has the student's name printed on it and nothing here
+removes it, so the default stands.
+
+Coarse location is the opposite case and is genuinely Not Linked: a privacy
+protection is applied before collection — the rounding — the payload is two
+numbers, and no identifier of any kind goes with it.
 
 **Do not claim the optional-disclosure exemption for it.** That exemption needs
 the collection to be no part of the app's primary functionality. Timetable
