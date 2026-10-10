@@ -59,11 +59,23 @@
   .card > * { position: relative; z-index: 1; }
 
   .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 16px;
     font-size: 24px;
     font-weight: 800;
     letter-spacing: 3px;
     color: rgba(255,255,255,0.55);
     margin-bottom: 28px;
+  }
+
+  /* The mark runs at full strength while the name beside it stays dimmed:
+     the logo is the thing worth recognising, the name is a caption to it. */
+  .wordmark img {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    display: block;
   }
 
   h1 {
@@ -191,7 +203,7 @@
 
   document.getElementById('root').innerHTML = `
     <div class="card">
-      <div class="wordmark">MyStudyFlow</div>
+      <div class="wordmark"><img src="logo-mark.png" alt="" /><span>MyStudyFlow</span></div>
       <h1>${card.title}</h1>
       <p class="sub">${card.sub}</p>
       <div class="stage ${card.shots.length > 1 ? 'pair' : 'single'}">

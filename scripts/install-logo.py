@@ -166,6 +166,13 @@ def main():
     flat[..., :3] = 255
     save('android-icon-monochrome.png', fit(downsize(flat, 1024), 432, ANDROID_SAFE))
 
+    # The promo card template is served from its own folder, so it gets its
+    # own copy of the mark rather than reaching up out of the web root.
+    promo = downsize(dark_mark, 256)
+    promo = promo.crop(promo.split()[3].getbbox())
+    promo.save(os.path.join(ASSETS, 'promo', 'logo-mark.png'))
+    wrote.append(f'promo/logo-mark.png {promo.size[0]}x{promo.size[1]} {promo.mode}')
+
     for line in wrote:
         print('  ' + line)
 
