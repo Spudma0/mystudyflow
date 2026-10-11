@@ -1,21 +1,20 @@
 PURPOSE AND AUDIENCE
-MyStudyFlow is a study planner for secondary students (15-18) working toward
-end-of-school exams. Their timetable, deadlines and actual studying normally
-live in three unconnected places. The app reads the school timetable in from a
-photo or PDF, tracks assignments and exams with reminders and countdowns,
-times study sessions and logs them against the right subject, and builds an
-ordered set of lessons for a subject from the textbook it is taught from.
+A study planner for secondary students (15-18) working toward end-of-school
+exams, whose timetable, deadlines and actual studying normally live in three
+unconnected places. It reads the school timetable in from a photo or PDF,
+tracks assignments and exams with reminders and countdowns, times study
+sessions and logs them against the right subject, and builds an ordered set of
+lessons for a subject from the textbook it is taught from.
 
 ACCESS
 The demo account is pre-loaded with a timetable, reminders, study history and
-a theme, so most of the app can be reviewed immediately. No sample files are
-needed.
+a theme, so most of the app can be reviewed at once. No sample files needed.
 
 STUDY PLANS ARE BUILT ON DEMAND -- PLEASE BUILD ONLY ONE
-The demo account deliberately ships without generated plans so the generation
-flow can be seen. Each build is a research pass plus one model call per lesson
-(10-20), billed to us; several in a row can exhaust our rate limit and start
-erroring. That is our quota, not a defect.
+The demo account ships without generated plans so the generation flow can be
+seen. Each build is a research pass plus one model call per lesson (10-20),
+billed to us; several in a row can exhaust our rate limit and start erroring.
+That is our quota, not a defect.
 
 To build one (about 5 minutes):
 1. Subjects tab > Mathematical Methods > Build study profile.
@@ -24,7 +23,7 @@ To build one (about 5 minutes):
      Author:  Michael Evans, Kay Lipson, David Greenwood
      Edition: 2nd
    Tap "Scan this textbook". This searches the web and can take up to three
-   minutes. A long wait here is expected, not a hang.
+   minutes; a long wait here is expected, not a hang.
 3. Scan step: the book and its units are listed. Tap "Looks right".
 4. Test step, either branch:
      "Yes, I have a test" -> What's it on: Arithmetic and geometric sequences;
@@ -32,51 +31,48 @@ To build one (about 5 minutes):
      "Not right now" -> pick one of the suggested areas.
 5. Tap "Build my lesson map" and stay on the screen while it writes.
 6. Open the subject for the lesson map, tap a lesson, then "Start 12
-   questions" for the question set.
+   questions".
 
 EXTERNAL SERVICES
 Supabase - authentication and storage of the student's own data.
 Anthropic (Claude) - reads imported timetable images, researches the named
   textbook, writes lessons and questions. Our requests carry no user
   identifier and no account details.
-Open-Meteo - weather for the optional clock widget. Coordinates rounded to
+Open-Meteo - weather for the optional clock widget; coordinates rounded to
   about 1 km, no account details.
 Railway - hosts our backend.  Expo (EAS) - builds and app updates.
-No ad networks, no analytics SDKs, no payment processors, no data brokers,
-no tracking.
+No ad networks, analytics SDKs, payment processors, data brokers or
+tracking.
 
 REGIONAL DIFFERENCES
 None. No geographic gating, no region-specific content, no locale-dependent
-behaviour. English only. The only location-aware feature is the optional
+behaviour. English only. The one location-aware feature is the optional
 weather widget, which behaves the same everywhere.
 
 REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
 Not a regulated industry: no medical, financial, legal or professional advice,
 not an accredited provider, examination board or credential issuer, no claims
 about grades. No textbook is hosted, copied or distributed. A named textbook
-is identified from public information and only factual bibliographic details
-and its chapter and topic names are reported; our instruction to the model
-forbids reproducing teaching text, worked examples, exercises or any
-substantial passage. Lessons are then written from scratch against a topic
-name with no access to the book, so they are original material and need no
-publisher licence. We claim no affiliation with any publisher.
+is identified from public information and only its bibliographic details and
+chapter and topic names are reported; our instruction to the model forbids
+reproducing teaching text, worked examples, exercises or any substantial
+passage. Lessons are written from scratch against a topic name with no access
+to the book, so they are original and need no publisher licence. We claim no
+affiliation with any publisher.
 
 PERMISSIONS -- BOTH OPTIONAL
-Location only for weather on the home screen; notifications only for reminders
-the user sets. Decline either and the app works normally.
+Location only for home screen weather; notifications only for reminders the
+user sets. Decline either and the app works normally.
 
 OTHER
 - Lesson content is written by a language model. The app and support page say
-  so; students are told to check anything that matters against their course
+  so, and students are told to check anything that matters against their own
   material.
-- All content is private to the account that created it. No sharing, no social
-  features, no communication between users, so no reporting or blocking
+- All content is private to the account that created it. No sharing, social
+  features or communication between users, so no reporting or blocking
   mechanism applies.
 - Account deletion in app: Profile > Delete Account.
-- No in-app purchases, no paid features, no paywall. No payment details are
+- No in-app purchases, paid features or paywall. No payment details are
   collected anywhere.
-- Support: https://mystudyflow-production.up.railway.app/support
-  Privacy: https://mystudyflow-production.up.railway.app/privacy
-
-If the backend is unreachable or a generation fails repeatedly, please email
-mystudyflowbusiness@gmail.com and we will fix it the same day.
+If the backend is unreachable or a generation repeatedly fails, email
+mystudyflowbusiness@gmail.com and we will fix it same day.
