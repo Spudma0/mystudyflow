@@ -1,0 +1,74 @@
+MyStudyFlow turns your school timetable into a study plan.
+
+It holds your classes, your deadlines and your actual studying in one place,
+and then writes you a full set of lessons for a subject from the textbook that
+subject is taught from.
+
+WHAT IS IN THIS BUILD
+
+Timetable — photograph your timetable or upload the PDF and it is read in for
+you, cycle and all, whether your school runs a five-day week or a ten-day
+fortnight. Or build it by hand. Today is one tap away, with room and teacher
+on every class and a live marker showing where you are in the day. On iPad you
+get the full week and the whole month at once.
+
+Reminders — assignments, personal tasks and exams, each with a notification
+that actually arrives. Exams count down to the minute.
+
+Study sessions — start a session, say what you are working on, set a finish
+time, add breaks on a repeating interval if you want them. The timer fills the
+screen. When you finish, the time lands against that subject on its own.
+
+Statistics — where your hours actually went, per subject and per week, and a
+rank for each subject that climbs from Wood to Gold as you put time in.
+
+Study plans — name the textbook your class uses and the app works out what
+your course covers, builds an ordered map of lessons, and writes each one:
+real explanation, worked examples, properly typeset maths, drawn chemical
+structures, and a question set that marks itself.
+
+Appearance — accent, background and card colours are all yours to pick, and
+the widgets on the home screen can be chosen and reordered.
+
+Everything follows your account between devices.
+
+WHAT IS WORTH TRYING
+
+1. Import your real timetable from a photo and see how much it gets right.
+   This is the feature most likely to meet a layout it has not seen, so an
+   odd result here is genuinely useful to know about.
+2. Set a reminder with a notification and check it arrives.
+3. Run a study session, including the breaks, and see the time logged.
+4. Build a study plan for one subject, then read a lesson end to end and run
+   its questions.
+5. Change the theme and reorder the home screen widgets.
+6. If you have an iPad, look at the week and month views, in both
+   orientations.
+
+PLEASE BUILD ONLY ONE OR TWO STUDY PLANS
+
+Each plan is a research pass over your textbook plus a written lesson for
+every topic in it, usually ten to twenty of them. They take a few minutes and
+they cost us real money per build, so please do not build plans for every
+subject. If one starts failing, that is us hitting a rate limit rather than
+a bug in the app.
+
+KNOWN LIMITS
+
+- Lessons are written by a language model. They can be wrong. Check anything
+  that matters against your own textbook or your teacher.
+- The textbook scan is only as good as what is publicly documented about your
+  book. Widely used textbooks come back in much more detail than obscure ones.
+- English only.
+- Nothing costs money in this build. There are no purchases and no paywall.
+- Location is only ever used for the weather on the home screen, and
+  notifications only for reminders you set. Decline either and everything
+  else still works.
+
+FEEDBACK
+
+Take a screenshot and use TestFlight's share sheet to send it with a note, or
+email mystudyflowbusiness@gmail.com. The useful things to include are the
+device, the iOS version, and what you were doing when it went wrong. If the
+timetable importer misreads your timetable, sending us the original photo
+helps more than anything else.
