@@ -16,19 +16,15 @@ seen. Each build is a research pass plus one model call per lesson (10-20),
 billed to us; several in a row can exhaust our rate limit and start erroring.
 That is our quota, not a defect.
 
-To build one (about 5 minutes):
+To build one (about 3 minutes):
 1. Subjects tab > Mathematical Methods > Build study profile.
-2. Textbook step:
-     Title:   Mathematical Methods VCE Units 3&4
-     Author:  Michael Evans, Kay Lipson, David Greenwood
-     Edition: 2nd
-   Tap "Scan this textbook". This searches the web and can take up to three
-   minutes; a long wait here is expected, not a hang.
+2. Textbook step. Title: Cambridge Maths Methods Units 1 And 2
+   Leave author and edition blank -- this is the book the demo account's own
+   plan was built from, so its lessons are already in our shared cache and
+   come back in seconds. Tap "Scan this textbook".
 3. Scan step: the book and its units are listed. Tap "Looks right".
-4. Test step, either branch:
-     "Yes, I have a test" -> What's it on: Arithmetic and geometric sequences;
-     any date a fortnight out; "Yes, from the book".
-     "Not right now" -> pick one of the suggested areas.
+4. Test step: "Yes, I have a test"; what it is on: Calculus; any date in
+   December; "Yes, from the book".
 5. Tap "Build my lesson map" and stay on the screen while it writes.
 6. Open the subject for the lesson map, tap a lesson, then "Start 12
    questions".
