@@ -176,20 +176,49 @@ export function SubjectProfileScreen({ route, navigation }: Props) {
             // lesson screen says which are missing and offers a rebuild.
             lastFailure = err;
           }
-          setWritten((n) => n + 1);
+          // Lessons written, not attempts made: a counter that reaches the
+          // total while most of them failed is how this looked finished.
+          setWritten(Object.keys(lessonContent).length);
         }
       };
 
       await Promise.all([worker(), worker(), worker()]);
 
-      // Every lesson failing is not a plan with gaps in it, it is a plan with
-      // nothing in it — almost always the backend being unreachable. Saving it
-      // would leave a study plan that looks built and opens empty everywhere,
-      // which is exactly the state this used to produce silently.
-      if (map.lessons.length > 0 && Object.keys(lessonContent).length === 0) {
-        throw lastFailure instanceof Error
-          ? lastFailure
-          : new Error('No lessons could be written. Check your connection and try again.');
+      // Anything still missing gets gone over again, one at a time.
+      //
+      // A lesson that ran out of time here was usually still being written on
+      // the server, and the server caches a lesson whether or not anyone was
+      // left waiting for it — so the second ask for it normally comes back out
+      // of the cache at once. Going one at a time also stops the three of them
+      // competing, which is what made them slow enough to miss the deadline.
+      for (let pass = 0; pass < 2; pass += 1) {
+        const missing = map.lessons.filter((l) => !lessonContent[l.id]);
+        if (missing.length === 0) break;
+        for (const l of missing) {
+          try {
+            lessonContent[l.id] = await generateLessonContent({
+              bookTitle: scan.book.title,
+              unitTitle: l.unitTitle,
+              topic: l.topic || l.title,
+            });
+            setWritten(Object.keys(lessonContent).length);
+          } catch (err) {
+            lastFailure = err;
+          }
+        }
+      }
+
+      // A plan is not built just because one lesson out of nine came back.
+      // Saving a mostly empty plan is what produced a lesson map where every
+      // tile opened on "no content yet", with nothing anywhere saying why.
+      const done = Object.keys(lessonContent).length;
+      if (map.lessons.length > 0 && done < map.lessons.length) {
+        const detail = lastFailure instanceof Error ? ` (${lastFailure.message})` : '';
+        throw new Error(
+          `Only ${done} of ${map.lessons.length} lessons could be written${detail}. ` +
+            'Nothing has been saved — try building the plan again, and the lessons that ' +
+            'did write will come back immediately.'
+        );
       }
 
       saveProfile({

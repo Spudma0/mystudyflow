@@ -224,7 +224,11 @@ export async function generateLessonContent(input: {
   /** Copied from the scanned textbook — the cache is keyed on it. */
   topic: string;
 }): Promise<LessonContent> {
-  const data = await postJson<LessonContent>('/api/subject/lesson-content', input, 150000);
+  // Longer than the server's own worst case. It allows the model 120s and
+  // retries once, so a slow lesson can take four minutes there; giving up at
+  // 150s here meant the server finished writing a lesson the app had already
+  // decided had failed.
+  const data = await postJson<LessonContent>('/api/subject/lesson-content', input, 260000);
   return {
     sections: data.sections ?? [],
     worked: data.worked ?? [],
