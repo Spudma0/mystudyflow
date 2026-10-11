@@ -138,6 +138,55 @@ async function postgresGet<T>(namespace: string, key: string): Promise<T | null>
   }
 }
 
+/**
+ * Everything held under one namespace.
+ *
+ * Only used for the small namespaces — the textbook scans, so a new query can
+ * be matched against books already known rather than paying to research one
+ * that is already on the shelf. Never call it for the lesson namespace, which
+ * is large and would be pulled into memory whole.
+ */
+export async function cacheList<T>(
+  namespace: string,
+  limit = 500
+): Promise<{ key: string; value: T }[]> {
+  if (!ENABLED) return [];
+  const store = sharedStore();
+  if (store) {
+    try {
+      const { data, error } = await store
+        .from(TABLE)
+        .select('key, value, created_at')
+        .eq('namespace', namespace)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (!error && data) {
+        const fresh = data.filter(
+          (r) => Date.now() - new Date(r.created_at as string).getTime() <= MAX_AGE_MS
+        );
+        return fresh.map((r) => ({ key: r.key as string, value: r.value as T }));
+      }
+    } catch (err) {
+      console.warn('[cache] shared list failed', namespace, err);
+    }
+  }
+  // Disk, for an instance with no shared store configured.
+  try {
+    const dir = join(CACHE_DIR, namespace);
+    const files = await readdir(dir);
+    const out: { key: string; value: T }[] = [];
+    for (const file of files.slice(0, limit)) {
+      if (!file.endsWith('.json')) continue;
+      const key = file.slice(0, -5);
+      const value = await diskGet<T>(namespace, key);
+      if (value !== null) out.push({ key, value });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export async function cacheSet<T>(namespace: string, key: string, value: T): Promise<void> {
   if (!ENABLED) return;
   await Promise.all([diskSet(namespace, key, value), postgresSet(namespace, key, value)]);

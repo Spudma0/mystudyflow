@@ -4,11 +4,12 @@ import {
   anthropic,
   RESEARCH_MODEL,
   LESSON_MODEL,
+  MATCH_MODEL,
   cachedSystem,
   logCacheUsage,
   parseJsonFromResponse,
 } from '../anthropic.js';
-import { cached, cacheKey, cacheStats } from '../cache.js';
+import { cacheList, cacheSet, cached, cacheKey, cacheStats } from '../cache.js';
 
 export const subjectRouter = Router();
 
@@ -195,6 +196,121 @@ interface TextbookScan {
 }
 
 /**
+ * Does this query name a book we have already researched?
+ *
+ * The scan cache is keyed on what the student typed, and two people with the
+ * same book essentially never type it the same way — "Cambridge Maths Methods
+ * Units 1 And 2" and "cambridge mathematical methods 1&2" are the same book
+ * and were two separate pieces of paid research. Worse, each scan resolves its
+ * own wording for the book's title, and the lesson cache is keyed on *that*,
+ * so a second spelling of the query split the far more expensive lesson cache
+ * too.
+ *
+ * Candidates are narrowed by word overlap first, then a cheap model decides,
+ * because the thing that defeats string matching here is vocabulary — maths
+ * against mathematical, the publisher present or absent, the edition written
+ * four ways. One Haiku call costs a fraction of a cent against the dollar or
+ * so a research pass costs, and against the twenty lesson writes behind it.
+ */
+
+/** Words that carry no identity and only dilute the overlap score. */
+const NOISE = new Set([
+  'the', 'a', 'an', 'and', 'of', 'for', 'edition', 'ed', 'by', 'vol', 'volume',
+  'textbook', 'book', 'student', 'senior', 'secondary',
+]);
+
+function words(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(' ')
+      .filter((w) => w && !NOISE.has(w))
+  );
+}
+
+/** Overlap of two word sets, as a fraction of the smaller one. */
+function overlap(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const w of a) if (b.has(w)) shared += 1;
+  return shared / Math.min(a.size, b.size);
+}
+
+interface KnownBook {
+  key: string;
+  value: TextbookScan;
+  label: string;
+}
+
+async function findKnownBook(descriptor: string): Promise<KnownBook | null> {
+  let known: { key: string; value: TextbookScan }[];
+  try {
+    known = await cacheList<TextbookScan>('textbook-scan');
+  } catch {
+    return null;
+  }
+  if (known.length === 0) return null;
+
+  const asked = words(descriptor);
+  const scored = known
+    .map((entry) => {
+      const b = entry.value?.book;
+      if (!b?.title) return null;
+      const label = [b.title, b.authors, b.edition].filter(Boolean).join(' · ');
+      return { key: entry.key, value: entry.value, label, score: overlap(asked, words(label)) };
+    })
+    .filter((c): c is KnownBook & { score: number } => !!c && c.score >= 0.34)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+
+  if (scored.length === 0) return null;
+  // A near-complete overlap needs no second opinion.
+  if (scored[0].score >= 0.95) return scored[0];
+
+  const list = scored.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
+  try {
+    const message = await anthropic.messages.create(
+      {
+        model: MATCH_MODEL,
+        max_tokens: 16,
+        system:
+          'You decide whether a student is naming a textbook that already appears in a list. ' +
+          'Same work, same units or year levels, same edition if both state one: that is a match, ' +
+          'however differently it is worded. A different volume, a different year level or a ' +
+          'different subject is not a match, even when the titles look alike. ' +
+          'Answer with the number alone, or NONE.',
+        messages: [
+          {
+            role: 'user',
+            content: `Student typed: ${descriptor}
+
+Known books:
+${list}
+
+Which number is the same book? Answer with the number, or NONE.`,
+          },
+        ],
+      },
+      { timeout: 20000, maxRetries: 1 }
+    );
+    const text = message.content
+      .map((b) => (b.type === 'text' ? b.text : ''))
+      .join('')
+      .trim();
+    const picked = Number.parseInt(text, 10);
+    if (Number.isFinite(picked) && picked >= 1 && picked <= scored.length) {
+      return scored[picked - 1];
+    }
+  } catch (err) {
+    // A matcher that fails is a cache miss, not an error: research it afresh.
+    console.warn('[subject] book matcher failed', err);
+  }
+  return null;
+}
+
+/**
  * POST /api/subject/textbook-scan
  * Body: { subjectName, textbookTitle, author?, edition?, yearLevel? }
  */
@@ -226,6 +342,17 @@ subjectRouter.post('/textbook-scan', async (req, res) => {
     // both split the cache and confused the model into commenting on the
     // mismatch.
     const key = cacheKey('textbook', textbookTitle, author, edition, yearLevel);
+
+    // Before paying to research it, see whether it is a book already on the
+    // shelf under someone else's spelling. The match is stored under this
+    // query's own key as well, so the next person who types it this way skips
+    // even the matcher.
+    const existing = await findKnownBook(descriptor);
+    if (existing) {
+      console.log(`[subject] textbook matched "${descriptor}" to "${existing.label}"`);
+      await cacheSet('textbook-scan', key, existing.value);
+      return res.json({ ...existing.value, cached: true });
+    }
 
     const { value: result, hit } = await cached('textbook-scan', key, async () => {
       const message = await researchWithWeb(

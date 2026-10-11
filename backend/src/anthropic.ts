@@ -107,3 +107,12 @@ export function parseJsonFromResponse<T>(message: Anthropic.Message): T {
  * without a matching gain. A plan of 7 lessons is 7 of these calls.
  */
 export const LESSON_MODEL = process.env.LESSON_MODEL || 'claude-sonnet-5';
+
+/**
+ * The smallest model, for deciding whether two names mean the same textbook.
+ *
+ * It is a one-line judgement over a short list, so the cheapest model is the
+ * right one: it runs on every scan that misses the cache, and it is there to
+ * avoid paying for research, not to do any.
+ */
+export const MATCH_MODEL = process.env.MATCH_MODEL || 'claude-haiku-4-5';
