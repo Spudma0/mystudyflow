@@ -1,73 +1,82 @@
-MyStudyFlow turns a student's school timetable into a study plan: it tracks
-classes and deadlines, logs study time per subject, and writes a full set of
-lessons for a subject from the textbook that subject is taught from.
+PURPOSE AND AUDIENCE
+MyStudyFlow is a study planner for secondary students (15-18) working toward
+end-of-school exams. Their timetable, deadlines and actual studying normally
+live in three unconnected places. The app reads the school timetable in from a
+photo or PDF, tracks assignments and exams with reminders and countdowns,
+times study sessions and logs them against the right subject, and builds an
+ordered set of lessons for a subject from the textbook it is taught from.
 
-The demo account is already populated with a timetable, reminders, study
-history and a custom theme, so most of the app can be reviewed immediately.
-
+ACCESS
+The demo account is pre-loaded with a timetable, reminders, study history and
+a theme, so most of the app can be reviewed immediately. No sample files are
+needed.
 
 STUDY PLANS ARE BUILT ON DEMAND -- PLEASE BUILD ONLY ONE
+The demo account deliberately ships without generated plans so the generation
+flow can be seen. Each build is a research pass plus one model call per lesson
+(10-20), billed to us; several in a row can exhaust our rate limit and start
+erroring. That is our quota, not a defect.
 
-The demo account deliberately ships without generated study plans. To review
-that part of the app please build one, and only one.
-
-Each build is a long chain of model calls billed to us: one research pass to
-identify the textbook and work out the course, then one write per lesson in
-the resulting plan, typically 10 to 20 of them. Building plans for several
-subjects in a row can exhaust our rate limit and start returning errors --
-that is our quota, not a defect in the app.
-
-
-HOW TO BUILD ONE (about 5 minutes end to end)
-
-1. Subjects tab, then Mathematical Methods, then Build study profile.
-
-2. Textbook step. Enter:
+To build one (about 5 minutes):
+1. Subjects tab > Mathematical Methods > Build study profile.
+2. Textbook step:
      Title:   Mathematical Methods VCE Units 3&4
      Author:  Michael Evans, Kay Lipson, David Greenwood
      Edition: 2nd
-   Tap "Scan this textbook". This searches the web to identify the book and
-   work out what the course covers. It can take up to three minutes. Please
-   do not cancel it -- a long wait here is normal, not a hang.
+   Tap "Scan this textbook". This searches the web and can take up to three
+   minutes. A long wait here is expected, not a hang.
+3. Scan step: the book and its units are listed. Tap "Looks right".
+4. Test step, either branch:
+     "Yes, I have a test" -> What's it on: Arithmetic and geometric sequences;
+     any date a fortnight out; "Yes, from the book".
+     "Not right now" -> pick one of the suggested areas.
+5. Tap "Build my lesson map" and stay on the screen while it writes.
+6. Open the subject for the lesson map, tap a lesson, then "Start 12
+   questions" for the question set.
 
-3. Scan step. The identified book and its units are listed. Tap "Looks right".
+EXTERNAL SERVICES
+Supabase - authentication and storage of the student's own data.
+Anthropic (Claude) - reads imported timetable images, researches the named
+  textbook, writes lessons and questions. Our requests carry no user
+  identifier and no account details.
+Open-Meteo - weather for the optional clock widget. Coordinates rounded to
+  about 1 km, no account details.
+Railway - hosts our backend.  Expo (EAS) - builds and app updates.
+No ad networks, no analytics SDKs, no payment processors, no data brokers,
+no tracking.
 
-4. Test step. Either branch is worth seeing; pick one:
-     - "Yes, I have a test"  -> What's it on: Arithmetic and geometric
-       sequences. Pick any date a couple of weeks out. Choose "Yes, from the
-       book". The whole plan is then aimed at that test.
-     - "Not right now"  -> choose one of the suggested areas, or type
-       "Differentiation from first principles". The plan becomes an intensive
-       deep dive on that area instead.
+REGIONAL DIFFERENCES
+None. No geographic gating, no region-specific content, no locale-dependent
+behaviour. English only. The only location-aware feature is the optional
+weather widget, which behaves the same everywhere.
 
-5. Tap "Build my lesson map". A counter shows each lesson being written. This
-   takes a few minutes; please stay on the screen until it completes.
-
-6. Open the subject to see the finished lesson map, tap any lesson to read it,
-   and use "Start 12 questions" to see the question set and marking.
-
+REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
+Not a regulated industry: no medical, financial, legal or professional advice,
+not an accredited provider, examination board or credential issuer, no claims
+about grades. No textbook is hosted, copied or distributed. A named textbook
+is identified from public information and only factual bibliographic details
+and its chapter and topic names are reported; our instruction to the model
+forbids reproducing teaching text, worked examples, exercises or any
+substantial passage. Lessons are then written from scratch against a topic
+name with no access to the book, so they are original material and need no
+publisher licence. We claim no affiliation with any publisher.
 
 PERMISSIONS -- BOTH OPTIONAL
+Location only for weather on the home screen; notifications only for reminders
+the user sets. Decline either and the app works normally.
 
-Location is used only to show local weather on the home screen. Notifications
-are used only for reminders the user sets. Decline either and the app works
-normally; neither gates any feature.
-
-
-OTHER THINGS TO KNOW
-
-- Lesson content is written by a language model. The app says so, as does the
-  support page. It is study material, not assessment, and we tell students to
-  check anything that matters against their own course material.
-
-- There are no purchases of any kind in this version. No paywall, no
-  subscription, no payment details are collected anywhere in the app.
-
-- Account deletion is in the app: Profile, then Delete Account. It removes the
-  account and everything stored against it.
-
-- Support:  https://mystudyflow-production.up.railway.app/support
-  Privacy:  https://mystudyflow-production.up.railway.app/privacy
+OTHER
+- Lesson content is written by a language model. The app and support page say
+  so; students are told to check anything that matters against their course
+  material.
+- All content is private to the account that created it. No sharing, no social
+  features, no communication between users, so no reporting or blocking
+  mechanism applies.
+- Account deletion in app: Profile > Delete Account.
+- No in-app purchases, no paid features, no paywall. No payment details are
+  collected anywhere.
+- Support: https://mystudyflow-production.up.railway.app/support
+  Privacy: https://mystudyflow-production.up.railway.app/privacy
 
 If the backend is unreachable or a generation fails repeatedly, please email
 mystudyflowbusiness@gmail.com and we will fix it the same day.
