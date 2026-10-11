@@ -340,3 +340,143 @@ export function plottableFrom(sources: (string | null | undefined)[]): Plottable
   }
   return found;
 }
+
+/** What a graph is looking at: centre in graph units, and the units it spans. */
+export interface Viewport {
+  cx: number;
+  cy: number;
+  /** Graph units across the full width. */
+  span: number;
+  /** Graph units down the full height, scaled independently of `span`. */
+  spanY: number;
+}
+
+/** The view used when nothing can be worked out from the functions. */
+export const DEFAULT_VIEWPORT: Viewport = { cx: 0, cy: 0, span: 20, spanY: 12 };
+
+/** The value at a given percentile of an already-sorted array. */
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.round((p / 100) * (sorted.length - 1))));
+  return sorted[i];
+}
+
+/**
+ * Where the curve does something worth seeing: its roots, its turning points,
+ * and the y axis. Found by sampling and watching for sign changes, which is
+ * enough for the shapes a lesson plots and needs no calculus on the
+ * expression itself.
+ *
+ * Changes of slope smaller than the curve's own scale are ignored. Without
+ * that, e^x far out in the negatives — where every sample is a hair above
+ * zero and the differences between them are floating-point dust — registers
+ * dozens of turning points, and the window gets dragged off to x = -40.
+ */
+function featureXs(fn: PlottableFunction, from: number, to: number): number[] {
+  const STEPS = 2000;
+  const width = to - from;
+  const values: number[] = [];
+  for (let i = 0; i <= STEPS; i += 1) {
+    values.push(fn.at(from + (width * i) / STEPS));
+  }
+  const finite = values.filter((v) => Number.isFinite(v)).map(Math.abs);
+  const scale = finite.length ? Math.max(...finite) : 1;
+  const minSlope = scale * 1e-7;
+
+  const found: number[] = [];
+  let prevSlope = NaN;
+  for (let i = 1; i <= STEPS; i += 1) {
+    const y = values[i];
+    const prev = values[i - 1];
+    if (!Number.isFinite(y) || !Number.isFinite(prev)) {
+      prevSlope = NaN;
+      continue;
+    }
+    const x = from + (width * i) / STEPS;
+    // A root: the curve crossed the axis between the last sample and this.
+    if ((prev <= 0 && y >= 0) || (prev >= 0 && y <= 0)) found.push(x);
+    const slope = y - prev;
+    if (Math.abs(slope) > minSlope) {
+      // A turning point: it stopped rising and began falling, or the reverse.
+      if (Number.isFinite(prevSlope) && prevSlope * slope < 0) found.push(x);
+      prevSlope = slope;
+    }
+  }
+  return found;
+}
+
+/**
+ * The features worth building a window around.
+ *
+ * A periodic curve has them all the way out to the edge of the probe, and a
+ * window holding every one of them shows forty periods of sin(x) as a solid
+ * band. Only the handful nearest the origin are kept, which is the part a
+ * lesson is talking about.
+ */
+function nearestFeatures(all: number[], keep: number): number[] {
+  if (all.length <= keep) return all;
+  return [...all].sort((a, b) => Math.abs(a) - Math.abs(b)).slice(0, keep);
+}
+
+/**
+ * A viewport that actually shows the curves.
+ *
+ * The window is taken from where each curve does something — its roots and
+ * turning points — rather than being the same twenty units about the origin
+ * whatever is drawn. The two axes are then scaled independently, because a
+ * single scale cannot show both y = sin(x) and y = x³: one comes out a flat
+ * line and the other a vertical streak.
+ */
+export function fitViewport(functions: PlottableFunction[], _aspect?: number): Viewport {
+  if (functions.length === 0) return DEFAULT_VIEWPORT;
+
+  const PROBE = 60;
+  const features: number[] = [0];
+  for (const fn of functions) {
+    features.push(...nearestFeatures(featureXs(fn, -PROBE, PROBE), 7));
+  }
+
+  let lo = Math.min(...features);
+  let hi = Math.max(...features);
+  // Nothing happens anywhere, so show a conventional window.
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi - lo < 1e-9) {
+    lo = -5;
+    hi = 5;
+  }
+  const pad = Math.max((hi - lo) * 0.6, 1);
+  let left = lo - pad;
+  let right = hi + pad;
+  // Wide enough to read, narrow enough to be about something.
+  const span = Math.min(400, Math.max(4, right - left));
+  const cx = (left + right) / 2;
+  left = cx - span / 2;
+  right = cx + span / 2;
+
+  // Now the height, from what the curves actually do across that window.
+  const ys: number[] = [];
+  for (const fn of functions) {
+    for (let i = 0; i <= 400; i += 1) {
+      const y = fn.at(left + ((right - left) * i) / 400);
+      if (Number.isFinite(y)) ys.push(y);
+    }
+  }
+  if (ys.length === 0) return { ...DEFAULT_VIEWPORT, cx, span };
+  ys.sort((a, b) => a - b);
+  // Trimmed, so one excursion up an asymptote does not set the scale.
+  let yLo = percentile(ys, 3);
+  let yHi = percentile(ys, 97);
+  if (yHi - yLo < 1e-9) {
+    // A constant: give it room either side rather than a zero-height window.
+    yLo -= 1;
+    yHi += 1;
+  }
+  const yPad = (yHi - yLo) * 0.18;
+  yLo -= yPad;
+  yHi += yPad;
+  // Keep the x axis in frame when the curve sits near it anyway: a school
+  // graph reads wrong without it.
+  if (yLo > 0 && yLo < (yHi - yLo) * 0.5) yLo = 0;
+  if (yHi < 0 && -yHi < (yHi - yLo) * 0.5) yHi = 0;
+
+  return { cx, cy: (yLo + yHi) / 2, span, spanY: Math.max(yHi - yLo, 1e-6) };
+}

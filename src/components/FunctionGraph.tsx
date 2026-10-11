@@ -2,7 +2,7 @@ import React from 'react';
 import { PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { PlottableFunction } from '../lib/plot';
+import { DEFAULT_VIEWPORT, PlottableFunction, Viewport, fitViewport } from '../lib/plot';
 import { useBaseTheme } from '../theme/useBaseTheme';
 import { withAlpha } from '../store/useThemeStore';
 import { MATH_FONT } from '../theme/mathFont';
@@ -19,16 +19,6 @@ import { colors, radii, spacing } from '../theme/theme';
 
 /** Distinct colours for several curves on one pair of axes. */
 const CURVE_COLOURS = [colors.green, colors.amber, colors.teal, colors.danger];
-
-interface Viewport {
-  /** Centre of the view, in graph units. */
-  cx: number;
-  cy: number;
-  /** Graph units across the full width. */
-  span: number;
-}
-
-const DEFAULT_VIEW: Viewport = { cx: 0, cy: 0, span: 20 };
 
 /** Grid spacing that lands on 1, 2 or 5 times a power of ten. */
 function niceStep(span: number): number {
@@ -56,13 +46,34 @@ export function FunctionGraph({
 }) {
   const t = useBaseTheme();
   const [width, setWidth] = React.useState(0);
-  const [view, setView] = React.useState<Viewport>(DEFAULT_VIEW);
+
+  // The window is worked out from the curves themselves rather than being the
+  // same twenty units about the origin every time. It depends on the box's
+  // shape, so it can only be settled once the box has been measured.
+  const signature = functions.map((f) => f.label).join('|');
+  const fitted = React.useMemo(
+    () => (functions.length ? fitViewport(functions) : DEFAULT_VIEWPORT),
+    // Keyed on what is drawn, not on the array's identity: the parent rebuilds
+    // that list on every render. Not on the box either — the two axes scale
+    // separately now, so the fit does not depend on its shape, and keying on
+    // it would throw away the reader's panning every time the box was
+    // measured again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [signature]
+  );
+
+  const [view, setView] = React.useState<Viewport>(fitted);
+  // Adopt the fit when it changes — on first measurement, on rotation, and if
+  // the lesson swaps the curve. Panning after that belongs to the reader.
+  React.useEffect(() => setView(fitted), [fitted]);
+
   // The viewport at the moment a drag started, so movement is measured from
   // there rather than accumulating rounding on every frame.
-  const dragStart = React.useRef<Viewport>(DEFAULT_VIEW);
+  const dragStart = React.useRef<Viewport>(fitted);
 
-  const perPixel = width > 0 ? view.span / width : 0;
-  const unitsTall = perPixel * height;
+  // The axes are scaled independently, so there is a pixel size for each.
+  const perPixelX = width > 0 ? view.span / width : 0;
+  const perPixelY = view.spanY / height;
 
   /**
    * Where the reader is pointing, in screen pixels, or null.
@@ -94,12 +105,13 @@ export function FunctionGraph({
             mode.current = 'pan';
             setTraceX(null);
           }
-          const scale = dragStart.current.span / Math.max(width, 1);
+          const scaleX = dragStart.current.span / Math.max(width, 1);
+          const scaleY = dragStart.current.spanY / Math.max(height, 1);
           setView({
             ...dragStart.current,
-            cx: dragStart.current.cx - g.dx * scale,
+            cx: dragStart.current.cx - g.dx * scaleX,
             // Screen y grows downward; the graph's does not.
-            cy: dragStart.current.cy + g.dy * scale,
+            cy: dragStart.current.cy + g.dy * scaleY,
           });
         },
       }),
@@ -108,7 +120,12 @@ export function FunctionGraph({
 
   const zoom = (factor: number) => {
     setTraceX(null);
-    setView((v) => ({ ...v, span: Math.min(1000, Math.max(0.5, v.span * factor)) }));
+    // Both axes together, so zooming does not quietly restretch the shape.
+    setView((v) => ({
+      ...v,
+      span: Math.min(1000, Math.max(0.5, v.span * factor)),
+      spanY: Math.max(1e-6, v.spanY * factor),
+    }));
   };
 
   /** Round the traced value to something a reader would actually write down. */
@@ -121,18 +138,21 @@ export function FunctionGraph({
 
   const left = view.cx - view.span / 2;
   const right = view.cx + view.span / 2;
-  const bottom = view.cy - unitsTall / 2;
-  const top = view.cy + unitsTall / 2;
+  const bottom = view.cy - view.spanY / 2;
+  const top = view.cy + view.spanY / 2;
 
   const toScreenX = (x: number) => ((x - left) / view.span) * width;
-  const toScreenY = (y: number) => height - ((y - bottom) / unitsTall) * height;
+  const toScreenY = (y: number) => height - ((y - bottom) / view.spanY) * height;
 
-  const step = niceStep(view.span);
+  // A grid step for each axis: they no longer share a scale, so they cannot
+  // share a spacing either.
+  const stepX = niceStep(view.span);
+  const stepY = niceStep(view.spanY);
   const gridX: number[] = [];
   const gridY: number[] = [];
   if (width > 0) {
-    for (let x = Math.ceil(left / step) * step; x <= right; x += step) gridX.push(x);
-    for (let y = Math.ceil(bottom / step) * step; y <= top; y += step) gridY.push(y);
+    for (let x = Math.ceil(left / stepX) * stepX; x <= right; x += stepX) gridX.push(x);
+    for (let y = Math.ceil(bottom / stepY) * stepY; y <= top; y += stepY) gridY.push(y);
   }
 
   /**
@@ -147,13 +167,13 @@ export function FunctionGraph({
     let d = '';
     let penDown = false;
     let previous = NaN;
-    const limit = unitsTall * 4;
+    const limit = view.spanY * 4;
 
     for (let px = 0; px <= width; px += 1) {
-      const x = left + px * perPixel;
+      const x = left + px * perPixelX;
       const y = fn.at(x);
       const drawable = Number.isFinite(y) && Math.abs(y - view.cy) < limit;
-      const jumped = penDown && Number.isFinite(previous) && Math.abs(y - previous) > unitsTall;
+      const jumped = penDown && Number.isFinite(previous) && Math.abs(y - previous) > view.spanY;
 
       if (!drawable || jumped) {
         penDown = false;
@@ -174,7 +194,7 @@ export function FunctionGraph({
   const trace = (() => {
     if (traceX === null || width <= 0) return null;
     const px = Math.max(0, Math.min(width, traceX));
-    const x = left + px * perPixel;
+    const x = left + px * perPixelX;
     for (let i = 0; i < functions.length; i += 1) {
       const y = functions[i].at(x);
       if (!Number.isFinite(y)) continue;
@@ -240,7 +260,7 @@ export function FunctionGraph({
 
             <G>
               {gridX.map((x) =>
-                Math.abs(x) < step / 100 ? null : (
+                Math.abs(x) < stepX / 100 ? null : (
                   <SvgText
                     key={`lx${x}`}
                     x={toScreenX(x)}
@@ -250,12 +270,12 @@ export function FunctionGraph({
                     fontFamily={MATH_FONT}
                     textAnchor="middle"
                   >
-                    {formatTick(x, step)}
+                    {formatTick(x, stepX)}
                   </SvgText>
                 )
               )}
               {gridY.map((y) =>
-                Math.abs(y) < step / 100 ? null : (
+                Math.abs(y) < stepY / 100 ? null : (
                   <SvgText
                     key={`ly${y}`}
                     x={Math.max(4, Math.min(width - 6, toScreenX(0) - 5))}
@@ -265,7 +285,7 @@ export function FunctionGraph({
                     fontFamily={MATH_FONT}
                     textAnchor="end"
                   >
-                    {formatTick(y, step)}
+                    {formatTick(y, stepY)}
                   </SvgText>
                 )
               )}
@@ -325,7 +345,7 @@ export function FunctionGraph({
           ]}
         >
           <Text style={[styles.readoutText, { color: t.text }]}>
-            ({trace.variable} = {readable(trace.x, step)}, {readable(trace.y, step)})
+            ({trace.variable} = {readable(trace.x, stepX)}, {readable(trace.y, stepY)})
           </Text>
         </View>
       )}
@@ -347,7 +367,7 @@ export function FunctionGraph({
         <View style={styles.buttons}>
           <GraphButton icon="remove" onPress={() => zoom(1.4)} />
           <GraphButton icon="add" onPress={() => zoom(1 / 1.4)} />
-          <GraphButton icon="refresh" onPress={() => setView(DEFAULT_VIEW)} />
+          <GraphButton icon="refresh" onPress={() => setView(fitted)} />
         </View>
       </View>
 
