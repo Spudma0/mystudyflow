@@ -321,3 +321,33 @@ export async function cacheStats(): Promise<Record<string, unknown>> {
     namespaces,
   };
 }
+
+/**
+ * Keep the Supabase project from idling itself out of existence.
+ *
+ * A free-tier project pauses after a stretch with no traffic, and a paused
+ * project answers auth with a 521 — so the app cannot sign anyone in, which
+ * is precisely how App Review found it: "unable to access the app because of
+ * server error". A tiny query every few hours is enough to count as traffic,
+ * costs nothing, and removes a failure that only shows up when nobody has
+ * used the app for a while — which is exactly when a reviewer opens it.
+ *
+ * Not a substitute for a paid plan if real usage ever outgrows the free tier.
+ */
+const KEEP_ALIVE_MS = 6 * 60 * 60 * 1000;
+
+export function startKeepAlive(): void {
+  const store = sharedStore();
+  if (!store) return;
+  const ping = async () => {
+    try {
+      const { error } = await store.from(TABLE).select('key', { head: true, count: 'exact' }).limit(1);
+      if (error) console.warn('[cache] keep-alive failed', error.message);
+    } catch (err) {
+      console.warn('[cache] keep-alive failed', err);
+    }
+  };
+  void ping();
+  // Unref'd so it never holds the process open on its own.
+  setInterval(ping, KEEP_ALIVE_MS).unref();
+}

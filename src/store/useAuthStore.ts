@@ -117,6 +117,27 @@ async function loadProfile(userId: string): Promise<Profile | null> {
   return (data as Profile) ?? null;
 }
 
+/**
+ * Turn a sign-in failure into something that says whose fault it is.
+ *
+ * The raw message from the client is the wrong thing to show here. When the
+ * backing service is unreachable it surfaces as a bare network failure, which
+ * on screen reads as the app being broken rather than as a service being
+ * down — App Review rejected a build over exactly that, reporting only
+ * "server error" after signing in.
+ */
+function signInMessage(error: { message?: string; status?: number } | null): string {
+  const raw = error?.message ?? '';
+  const status = error?.status ?? 0;
+  if (/invalid login|invalid credentials|email not confirmed/i.test(raw)) {
+    return raw;
+  }
+  if (status >= 500 || /network|fetch|timeout|timed out|load failed|connection/i.test(raw)) {
+    return "Can't reach MyStudyFlow right now. This is us, not you — please try again in a few minutes.";
+  }
+  return raw || 'Could not sign in.';
+}
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
   status: 'loading',
   session: null,
@@ -199,7 +220,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       password,
     });
     if (error || !data.session) {
-      set({ busy: false, error: error?.message ?? 'Could not sign in.' });
+      set({ busy: false, error: signInMessage(error) });
       return false;
     }
     const profile = await loadProfile(data.session.user.id);
