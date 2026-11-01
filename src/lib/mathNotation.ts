@@ -19,16 +19,21 @@ import {
  */
 
 /** Word and ASCII forms that have a proper printed symbol. */
+// A letter in front of one of these names means it is part of a word —
+// "alphabet", "define", "emu" — but a digit in front of it does not. "2pi r"
+// and "3theta" are simply how a coefficient is written, and demanding a word
+// boundary on the left left them as the bare English word sitting in the
+// middle of a formula. The boundary on the right still keeps "alphabet" out.
 const SYMBOLS: [RegExp, string][] = [
-  [/\\?\balpha\b/g, 'α'],
-  [/\\?\bbeta\b/g, 'β'],
-  [/\\?\btheta\b/g, 'θ'],
-  [/\\?\blambda\b/g, 'λ'],
-  [/\\?\bmu\b/g, 'μ'],
-  [/\\?\bsigma\b/g, 'σ'],
-  [/\\?\bDelta\b/g, 'Δ'],
-  [/\\?\bpi\b/g, 'π'],
-  [/\\?\binfinity\b|\\?\binf\b/g, '∞'],
+  [/\\?(?<![A-Za-z])alpha\b/g, 'α'],
+  [/\\?(?<![A-Za-z])beta\b/g, 'β'],
+  [/\\?(?<![A-Za-z])theta\b/g, 'θ'],
+  [/\\?(?<![A-Za-z])lambda\b/g, 'λ'],
+  [/\\?(?<![A-Za-z])mu\b/g, 'μ'],
+  [/\\?(?<![A-Za-z])sigma\b/g, 'σ'],
+  [/\\?(?<![A-Za-z])Delta\b/g, 'Δ'],
+  [/\\?(?<![A-Za-z])pi\b/g, 'π'],
+  [/\\?(?<![A-Za-z])infinity\b|\\?(?<![A-Za-z])inf\b/g, '∞'],
   [/\bin R\b/g, '∈ ℝ'],
   [/\bin Z\b/g, '∈ ℤ'],
   [/\bin N\b/g, '∈ ℕ'],
@@ -40,7 +45,7 @@ const SYMBOLS: [RegExp, string][] = [
   [/\+-|\+\/-/g, '±'],
   [/\bintegral\b|\bint\b(?!\w)/g, '∫'],
   [/\bsum\b(?=\s|$)/g, 'Σ'],
-  [/\bdelta\b/g, 'δ'],
+  [/(?<![A-Za-z])delta\b/g, 'δ'],
   // Emphasis first: *near* is a marked-up word, not a multiplication. Only a
   // star sitting between two operands is a times sign.
   [/\*([^*\n]{1,60})\*/g, '$1'],
@@ -257,6 +262,24 @@ export function parseMath(source: string): MathNode[] {
       starts.pop();
       nodes.pop();
     }
+    // A node can begin before the cut and run past it, and then popping is too
+    // blunt and keeping it is too generous: in `x = (b^2)/(2a)` the text node
+    // holds `x = (b`, whose last two characters belong to the numerator. Left
+    // whole, the numerator was printed once as stray text and again as the
+    // fraction — `x = (bb²⁄2a`. Only text can be cut down; nothing else here
+    // means anything in half.
+    const last = nodes[nodes.length - 1];
+    if (last && last.kind === 'text') {
+      const from = starts[starts.length - 1];
+      if (from + last.text.length > at) {
+        const kept = last.text.slice(0, at - from);
+        if (kept) last.text = kept;
+        else {
+          nodes.pop();
+          starts.pop();
+        }
+      }
+    }
     if (bufferStart >= at) buffer = '';
     else buffer = buffer.slice(0, at - bufferStart);
   };
@@ -344,13 +367,30 @@ const SUBSCRIPT: Record<string, string> = {
 function raise(text: string, table: Record<string, string>): string | null {
   let out = '';
   for (const ch of text) {
-    const mapped = table[ch] ?? table[ch.toLowerCase()];
+    // Case is not folded here. There is no raised capital N, and borrowing the
+    // small one printed x^N as xⁿ -- indistinguishable from x^n, which in a
+    // sequence or a sum is a different thing. Better to leave the index as
+    // written than to quietly change what it says.
+    const mapped = table[ch];
     // One unmappable character and the whole index is better left as written
     // than shown half-raised.
     if (!mapped) return null;
     out += mapped;
   }
   return out;
+}
+
+/**
+ * How to write a subscript that has no lowered form.
+ *
+ * Brackets read correctly after a name that takes an argument, so lim_(x->a)
+ * becomes lim(x→a). After a variable they read as function application, and
+ * T_c came out as T(c) -- which says something else entirely. So a condition
+ * keeps the brackets and a plain index keeps the underscore, which is how it
+ * would be written in plain text anyway.
+ */
+function loweredFallback(text: string): string {
+  return /[\s→<>=+\-,]/.test(text) ? `(${text})` : `_${text}`;
 }
 
 /**
@@ -376,9 +416,7 @@ export function typesetMath(source: string): string {
         case 'sup':
           return raise(node.text, SUPERSCRIPT) ?? `^(${node.text})`;
         case 'sub':
-          // Where a character has no lowered form — "lim_(x->a)" — brackets
-          // read better than leaving a bare underscore in the sentence.
-          return raise(node.text, SUBSCRIPT) ?? `(${node.text})`;
+          return raise(node.text, SUBSCRIPT) ?? loweredFallback(node.text);
         case 'root':
           // The overline is what closes a root; without it, brackets do.
           return `√(${typesetMath(node.body)})`;

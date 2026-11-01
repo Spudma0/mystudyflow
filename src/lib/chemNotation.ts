@@ -108,12 +108,23 @@ export function looksLikeChemistry(source: string): boolean {
   // punctuation alone would leave the nonsense word "nH".
   const words =
     (stripSubscripts(s).replace(/[()[\]^]/g, ' ').match(/[A-Za-z]+/g) ?? []);
+  let sawElement = false;
   for (const word of words) {
+    const parts = splitElements(word);
+    if (parts) {
+      // A placeholder is not an element. "R" and "X" stand in for a group, so
+      // they can appear in a formula but cannot be the whole of one.
+      if (parts.some((token) => ELEMENTS.has(token))) sawElement = true;
+      continue;
+    }
     if (GROUPS.has(word)) continue;
-    if (splitElements(word)) continue;
     return false;
   }
-  return true;
+  // Something in it has to actually be an element. Without this last test a
+  // string needed only an arrow and a letter that happens to be a placeholder:
+  // "n <=> 0" — a variable and an if-and-only-if — was read as chemistry and
+  // came back carrying the equilibrium arrow.
+  return sawElement;
 }
 
 /**
