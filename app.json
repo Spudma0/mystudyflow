@@ -11,7 +11,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.spudma.mystudyflow",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true
+        }
       }
     },
     "android": {
@@ -42,11 +46,19 @@
       ],
       "expo-asset",
       "expo-notifications",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "MyStudyFlow uses your approximate location to show current weather on your home screen. For example, showing the temperature and a rain icon for where you are beside today's classes, so you know what to expect walking between them. The app works normally if you decline."
+          "locationWhenInUsePermission": "MyStudyFlow uses your approximate location to show current weather on your home screen. For example, showing the temperature and a rain icon for where you are beside today's classes, so you know what to expect walking between them. The app works normally if you decline.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false
         }
       ],
       [
