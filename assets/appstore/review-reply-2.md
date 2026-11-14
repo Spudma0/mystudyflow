@@ -4,8 +4,9 @@ Everything between the two rules is the reply. Send it with the new build
 attached to the version; both fixes are native configuration, so neither takes
 effect until that build is the one under review.
 
-Check the build number in App Store Connect before sending — it should be
-1.0 (5), but confirm rather than take my word for it.
+The build to attach is 1.0 (8), from commit 2e12709 — builds 7 and 8 are the
+same commit, 8 is simply the later upload. Build 6 is from before the second
+round of purpose-string fixes, so do not attach that one.
 
 ---
 
