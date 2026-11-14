@@ -49,7 +49,7 @@
       [
         "expo-secure-store",
         {
-          "faceIDPermission": false
+          "faceIDPermission": "MyStudyFlow keeps your sign-in in the device keychain so you do not have to type it each time. Face ID is only ever used by iOS to unlock that stored sign-in on this device — MyStudyFlow never receives or stores biometric data, and no other feature uses it."
         }
       ],
       [
@@ -58,7 +58,7 @@
           "locationWhenInUsePermission": "MyStudyFlow uses your approximate location to show current weather on your home screen. For example, showing the temperature and a rain icon for where you are beside today's classes, so you know what to expect walking between them. The app works normally if you decline.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false
+          "motionUsagePermission": "MyStudyFlow's weather widget asks iOS for your approximate location, and the location service may use motion data to work that out — for example, to settle on a position without waking the GPS. MyStudyFlow does not read step counts, workouts or any activity history."
         }
       ],
       [
