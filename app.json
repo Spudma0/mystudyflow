@@ -31,14 +31,30 @@
     "plugins": [
       "expo-font",
       "@react-native-community/datetimepicker",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
       "expo-asset",
       "expo-notifications",
       "expo-secure-store",
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "MyStudyFlow uses your location to show the current weather on your home screen."
+          "locationWhenInUsePermission": "MyStudyFlow uses your approximate location to show current weather on your home screen. For example, showing the temperature and a rain icon for where you are beside today's classes, so you know what to expect walking between them. The app works normally if you decline."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "MyStudyFlow uses the camera so you can photograph your own study notes and keep them with a study session. For example, after working through a page of maths problems you can take a picture of it and it is saved against that session, so you can look back at what you actually did.",
+          "photosPermission": "MyStudyFlow uses your photo library so you can attach pictures you have already taken to a study session. For example, choosing an existing photo of your worked solutions to keep alongside the time you logged for that subject.",
+          "microphonePermission": false
         }
       ]
     ],
